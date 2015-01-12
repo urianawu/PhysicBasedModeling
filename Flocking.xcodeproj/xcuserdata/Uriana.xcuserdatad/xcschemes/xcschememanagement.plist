@@ -4,7 +4,7 @@
 <dict>
 	<key>SchemeUserState</key>
 	<dict>
-		<key>BouncingBall.xcscheme</key>
+		<key>Flocking.xcscheme</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>0</integer>
@@ -12,7 +12,7 @@
 	</dict>
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
-		<key>C624604317E02AF60099165B</key>
+		<key>C617EA90180B1A37003FC604</key>
 		<dict>
 			<key>primary</key>
 			<true/>

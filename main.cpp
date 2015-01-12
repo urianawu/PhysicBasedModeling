@@ -1,17 +1,17 @@
 //
 //  main.c
-//  BouncingBall
+//  Flocking
 //
-//  Created by Uriana on 9/10/13.
+//  Created by Uriana on 10/13/13.
 //  Copyright (c) 2013 Uriana. All rights reserved.
 //
 
-
+#include <stdio.h>
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>   
+#include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
+#include "Vector3D.h"
 
 #ifdef __APPLE__
 #  include <GLUI/glui.h>
@@ -20,590 +20,611 @@
 #endif
 
 #define WIDTH 800
-#define HEIGHT 600
+#define HEIGHT 800
 
-#define RANDOM_BUTTON 1
+#define N 200     //number of particles
+#define PI 3.141592654
 
 //used colors
-GLfloat black[] = { 0.0, 0.0, 0.0, 1.0 };
-GLfloat yellow[] = { 1.0, 1.0, 0.0, 1.0 };
-GLfloat pink[] = { 0.9, 0.4, 0.4, 1.0 };
-GLfloat cyan[] = { 0.0, 1.0, 1.0, 1.0 };
-GLfloat white[] = { 1.0, 1.0, 1.0, 1.0 };
-GLfloat direction[] = { 1.0, 1.0, 1.0, 0.0 };
+//GLfloat black[] = { 0.0, 0.0, 0.0, 1.0 };
+//GLfloat yellow[] = { 1.0, 1.0, 0.0, 1.0 };
+//GLfloat pink[] = { 0.9, 0.4, 0.4, 1.0 };
+//GLfloat cyan[] = { 0.0, 1.0, 1.0, 1.0 };
+//GLfloat white[] = { 1.0, 1.0, 1.0, 1.0 };
+//GLfloat direction[] = { 1.0, 1.0, 1.0, 0.0 };
+
+
 
 //structures
 typedef struct {
-    float position[3];
-    float velocity[3];
+    Point3D position[N];
+    Vector3D velocity[N];
+    Vector3D color[N];
+    int lifespan[N];
+    float mass;
 }State;
 
+typedef struct{
+    Point3D position;
+    Vector3D velocity;
+    Vector3D color;
+    float mass;
+}Lead;
+
 typedef struct {
-    float value[3];
+    Vector3D value;
+    Vector3D accel;
 }Force;
 
 typedef struct {
-    float normal[3];
-    float point[3];
-
+    Vector3D normal;
+    Point3D point;
+    
 }Plane;
+
+typedef struct {
+    float radius;
+    Point3D center;
+    
+}Sphere;
+
 
 //public variables
 State s_initial, s_current, s_next;
-Plane p_left, p_right, p_bot, p_top, p_back, p_front;
-float acceleration[3];
+Lead lead_current, lead_next;
+Plane p_left, p_right, p_bot, p_top, p_back, p_front, p_polygen;
+Sphere s_inner, s_outer;
+Vector3D acceleration[N];
+Vector3D lead_accel;
 
-
-float tranPos[3];     //translating position
+Vector3D tranPos[N];     //translating position
 double t;             // simulation time
-int planeIndicator;     //which plane it collides
 
 //public defined parameters
-double size = 2;
-double radius = 0.2;    //radius of ball
-double v_max = 1;     // maximum initial speed of ball
-double x_max = 2;       // maximum initial position of ball
-float mass = 3;     //mass of ball
+double size = 2;        //the size of the ball
+Point3D vertices[3];   //vertices of polygen
+float innerPos[3];
+double v_max = 2;     // maximum initial speed of ball
+double x_max = 1;       // maximum initial position of ball
+double c_max = 0.5;
+
 float g = 1;        //gravity
-float d = 0.1;      //air resistance factor
+float ad = 0.01;      //air resistance factor
 float e = 0.5;      //elasticity factor
-float miu = 0.5;    //friction factor
+float miu = 0.1;    //friction factor
 
+float ka = 0.005;     //flocking avoidance factor
+float kv = 0.01;     //flocking velocity matching factor
+float kc = 0.02;     //flocking centering factor
+float kl = 2;
 
-double h = 0.1;     // time step for Euler Integration
-int frames_per_second = 30;   // display rate
-float tolerance = 0.001;//fabsf(h/log(h));    // error tolerance
+double h = 0.01;     // time step for Euler Integration
+double frames_per_second = 30;   // display rate
 
-//GUI parameters
-int main_window;
-GLboolean paused = GL_FALSE;    //pause the animation
-GLboolean windExist = GL_FALSE;
+float tolerance = 0.01;    // position error tolerance
+float vtolerance = 0.15;     // velocity tolerance
+
 GLfloat posx = -1.0;    //camera position
-GLboolean randomVelocity = GL_FALSE;
+GLfloat posy = 1.0;    //camera position
+GLUquadricObj *quadratic;
+GLfloat mousex;
+GLfloat mousey;
 
-GLUI_EditText *vmaxField;
-GLUI_Spinner *vx;
-GLUI_Spinner *vy;
-GLUI_Spinner *vz;
-GLUI_Spinner *m;
-GLUI_Spinner *r;
-GLUI_Spinner *timeS;
-GLUI_RadioGroup *disL;
-GLUI_EditText *gField;
-GLUI_EditText *dField;
-GLUI_EditText *eField;
-GLUI_EditText *miuField;
-GLUI_Checkbox *windBox;
+double gaussrand()
+{
+	static double U, V;
+	static int phase = 0;
+	double Z;
+    
+	if(phase == 0) {
+		U = (rand() + 1.) / (RAND_MAX + 2.);
+		V = rand() / (RAND_MAX + 1.);
+		Z = sqrt(-2 * log(U)) * sin(2 * PI * V);
+	} else
+		Z = sqrt(-2 * log(U)) * cos(2 * PI * V);
+    
+	phase = 1 - phase;
+    
+	return Z;
+}
+
 
 void box()
 {
     glPushMatrix();
-    glScaled((size+radius)*2, (size+radius)*2, (size+radius)*2);
-    glRotatef(5.0, 0.0, 1.0, 0.0);
+    glScaled((size)*2, (size)*2, (size)*2);
+    //glRotatef(5.0, 0.0, 1.0, 0.0);
     
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, cyan);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, white);
-    glMaterialf(GL_FRONT, GL_SHININESS, 50);
-    glDepthMask(GL_TRUE);
-    glutWireCube(1.0);
-    
-    // Yellow side - BACK
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, yellow);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, white);
-    glMaterialf(GL_FRONT, GL_SHININESS, 50);
-    
-    glBegin(GL_POLYGON);
-    glVertex3f(  0.5, -0.5, -0.5 );
-    glVertex3f(  0.5,  0.5, -0.5 );
-    glVertex3f( -0.5,  0.5, -0.5 );
-    glVertex3f( -0.5, -0.5, -0.5 );
-    glEnd();
-    
-    //back plane
-    p_back.normal[0] = 0;
-    p_back.normal[1] = 0;
-    p_back.normal[2] = 1;
-    
-    p_back.point[0] = 0;
-    p_back.point[1] = 0;
-    p_back.point[2] = -2;
-    //front plane
-    p_front.normal[0] = 0;
-    p_front.normal[1] = 0;
-    p_front.normal[2] = -1;
-
-    p_front.point[0] = 0;
-    p_front.point[1] = 0;
-    p_front.point[2] = 2;
-
-    
-        
-    // Cyan side - LEFT
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, cyan);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, white);
-    glMaterialf(GL_FRONT, GL_SHININESS, 50);
-    
-    glBegin(GL_POLYGON);
-    glVertex3f( 0.5, -0.5, -0.5 );
-    glVertex3f( 0.5,  0.5, -0.5 );
-    glVertex3f( 0.5,  0.5,  0.5 );
-    glVertex3f( 0.5, -0.5,  0.5 );
-
-    glEnd();
-    
-    //left plane
-    p_left.normal[0] = 1;
-    p_left.normal[1] = 0;
-    p_left.normal[2] = 0;
-    
-    p_left.point[0] = -2;
-    p_left.point[1] = 0;
-    p_left.point[2] = 0;
-    
-
-    //right plane
-    p_right.normal[0] = -1;
-    p_right.normal[1] = 0;
-    p_right.normal[2] = 0;
-
-    p_right.point[0] = 2;
-    p_right.point[1] = 0;
-    p_right.point[2] = 0;
-
-
-    
-    // Black side - BOTTOM
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, black);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, white);
-    glMaterialf(GL_FRONT, GL_SHININESS, 50);
-    
-    glBegin(GL_POLYGON);
-    glVertex3f(  0.5, -0.5, -0.5 );
-    glVertex3f(  0.5, -0.5,  0.5 );
-    glVertex3f( -0.5, -0.5,  0.5 );
-    glVertex3f( -0.5, -0.5, -0.5 );
-     
-    glEnd();
-    
-    //bottom plane
-    p_bot.normal[0] = 0;
-    p_bot.normal[1] = 1;
-    p_bot.normal[2] = 0;
-    
-    p_bot.point[0] = 0;
-    p_bot.point[1] = -2;
-    p_bot.point[2] = 0;
-    
-    //top plane
-    p_top.normal[0] = 0;
-    p_top.normal[1] = -1;
-    p_top.normal[2] = 0;
-
-    p_top.point[0] = 0;
-    p_top.point[1] = 2;
-    p_top.point[2] = 0;
-
-    
+    //    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, black);
+    //    glMaterialfv(GL_FRONT, GL_SPECULAR, white);
+    //    glMaterialf(GL_FRONT, GL_SHININESS, 100);
+    //    glDepthMask(GL_TRUE);
+    glColor3f(0, 0.3, 0.3);
+    glutWireSphere(1.0, 16, 10);
     glPopMatrix();
     
+    glPushMatrix();
+    glColor3f(0.5, 0.5 ,0.5 );
+    //
+    glTranslatef(s_inner.center.x,s_inner.center.y,s_inner.center.z);
+    //    glRotated(90, 1, 0, 0);
+    //    gluCylinder(quadratic,1.0f,0.0f,2.0f,3,3);
+    
+    glutSolidSphere(s_inner.radius, 24, 24);
+    glPopMatrix();
 }
 
-void ball()
+void initPlaneNormal()
 {
-    glPushMatrix();
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, pink);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, white);
-    glMaterialf(GL_FRONT, GL_SHININESS, 30);
-    glDepthMask(GL_TRUE);
     
-    glTranslatef(tranPos[0],tranPos[1],tranPos[2]);
-    glutSolidSphere(radius, 100, 100);
+    Vector3D v1, v2;
+    Vector3D polygenNormal;
+    float normalValue = 0;
+    v1 = vertices[1] - vertices[0];
+    v2 = vertices[2] - vertices[1];
     
-    glPopMatrix();
+    
+    polygenNormal = Cross(v1, v2);
+    normalValue = Magnitude(polygenNormal);
+    
+    p_polygen.normal = -polygenNormal/normalValue;
+    p_polygen.point = vertices[1];
+    
+    //printf("polygen point %f %f %f\n",p_polygen.point[0],p_polygen.point[1],p_polygen.point[2]);
+    
+    //back plane
+    p_back.normal.Set(0,0,1);
+    p_back.point.Set(0,0,-2);
+    //front plane
+    p_front.normal.Set(0,0,-1);
+    p_front.point.Set(0,0,2);
+    
+    //left plane
+    p_left.normal.Set(1,0,0);
+    p_left.point.Set(-2, 0, 0);
+    
+    //right plane
+    p_right.normal.Set(-1,0,0);
+    p_right.point.Set(2,0,0);
+    
+    //bottom plane
+    p_bot.normal.Set(0,1,0);
+    p_bot.point.Set(0,-2,0);
+    
+    //top plane
+    p_top.normal.Set(0,-1,0);
+    p_top.point.Set(0,2,0);
+    
+    //inner sphere
+    s_inner.radius = 0.2;
+    s_inner.center.Set(innerPos[0], innerPos[1], innerPos[2]);
+    
+    //outer sphere
+    s_outer.radius = size*2;
+    s_outer.center.Set(0, 0, 0);
 }
 
 void initialization()
 {
-    srand ((unsigned int)time(0));
     
-    s_initial.position[0] = x_max * ((double)rand() / (double)RAND_MAX *2 - 1);
-    s_initial.position[1] = x_max * ((double)rand() / (double)RAND_MAX *2 - 1);
-    s_initial.position[2] = x_max * ((double)rand() / (double)RAND_MAX *2 - 1);
+    for (int n =0; n<N; n++) {
+        Vector3D vn(0.5,0.5,0.5);
+        Vector3D v(0,0,0);
+        Vector3D random(0.2*gaussrand(),0.2*gaussrand(),0.2*gaussrand());
+        //v = vn + random;
+        v = vn;
+        float a, b, c;
+        do {
+        a = fabsf(gaussrand());
+        b = fabsf(gaussrand());
+        c = 1-a-b;
+        }while (c < 0);
+        
+        vertices[0].Set(0.5, -0.5, 0.5);
+        vertices[1].Set(0.3, 0.5, 0.7);
+        vertices[2].Set(0, -0.5, 0.3);
 
-    s_initial.velocity[0] = 0;
-    s_initial.velocity[1] = 0;
-    s_initial.velocity[2] = 0;
-    
-    
-    s_current = s_initial;
-    //paused = GL_TRUE;
-}
-
-void restart()
-{
-    srand ((unsigned int)time(0));
-    
-    s_current.position[0] = x_max * ((double)rand() / (double)RAND_MAX *2 - 1);
-    s_current.position[1] = x_max * ((double)rand() / (double)RAND_MAX *2 - 1);
-    s_current.position[2] = x_max * ((double)rand() / (double)RAND_MAX *2 - 1);
-    
-    if (randomVelocity) {
-        s_current.velocity[0] = v_max * ((double)rand() / (double)RAND_MAX *2 - 1);
-        s_current.velocity[1] = v_max * ((double)rand() / (double)RAND_MAX *2 - 1);
-        s_current.velocity[2] = v_max * ((double)rand() / (double)RAND_MAX *2 - 1);
-        vx->set_float_val(s_current.velocity[0]);
-        vy->set_float_val(s_current.velocity[1]);
-        vz->set_float_val(s_current.velocity[2]);
-
-    }else {
-        s_current.velocity[0] = vx->get_float_val();
-        s_current.velocity[1] = vy->get_float_val();
-        s_current.velocity[2] = vz->get_float_val();
+        s_current.position[n] = a*vertices[0]+b*vertices[1]+c* vertices[2];
+        s_current.velocity[n] = v;
+        s_current.color[n].Set(1,1,1);
+        s_current.mass = 0.1;
     }
-    randomVelocity = GL_FALSE;
-
-    mass = m->get_float_val();
-    radius = (double) r->get_float_val();
-    v_max = (double) vmaxField->get_float_val();     // maximum initial speed of ball
-    g = gField->get_float_val();        //gravity
-    d = dField->get_float_val();      //air resistance factor
-    e = eField->get_float_val() ;      //elasticity factor
-    miu = miuField->get_float_val();    //friction factor
-    h = (double)timeS->get_float_val();
-    //printf("RESTART!!!!!!!!! mass %f radius %f vmax %f gra %f airr %f elas %f fric %f timestep %f",mass, radius,v_max,g,d,e,miu,h);
-    frames_per_second = 30;
-    disL->set_int_val(1);
-    windExist = windBox->get_int_val();
-}
-
-float PlaneCollision(Plane p)
-{
-    float s_vector_current[3];
-    float s_vector_next[3];
-    float DotProduct_current = 0 ;
-    float DotProduct_next = 0;
     
-    for (int i=0; i<3; i++) {
-        s_vector_current[i] = s_current.position[i] - p.point[i];
-        s_vector_next[i] = s_next.position[i] - p.point[i];
-        DotProduct_current += s_vector_current[i] * p.normal[i];
-        DotProduct_next += s_vector_next[i] * p.normal[i];
-    }
-
-    // Determine if it didnt collide
-    float f;
-
-    if (( DotProduct_current > 0 && DotProduct_next > 0) || (DotProduct_current < 0 && DotProduct_next < 0))
-        f = 0;
-    else 
-        f = (fabsf(DotProduct_current)) / (fabsf(DotProduct_next)+fabsf(DotProduct_current));
-    // fraction of timestep where it happened
+    lead_current.position.Set(0.5,0.5,0.5);
+    lead_current.velocity.Set(0.5, 0.5, 0.5);
+    lead_current.color.Set(0.5, 0.5, 0.5);
+    lead_current.mass = 0.1;
     
-
-    return f;
+    innerPos[0] = 0;
+    innerPos[1] = 0;
+    innerPos[2] = 0;
     
 }
 
-float CollisionDetection()
+void CollisionResponse (float d, Vector3D& p,Vector3D& v, Vector3D &normal, Point3D &point)
 {
-    
-    float f = 0;
-    
-    if (PlaneCollision(p_front) != 0) {
-        planeIndicator = 1;
-        f = PlaneCollision(p_front);
-        return f;
-    }
-    if (PlaneCollision(p_back) != 0) {
-        planeIndicator = 2;
-        f = PlaneCollision(p_back);
-        return f;
-    }
-    if (PlaneCollision(p_right) != 0) {
-        planeIndicator = 3;
-        f = PlaneCollision(p_right);
-        return f;
-    }
-    if (PlaneCollision(p_left) != 0) {
-        planeIndicator = 4;
-        f = PlaneCollision(p_left);
-        return f;
-    }
-    if (PlaneCollision(p_bot) != 0) {
-        planeIndicator = 5;
-        f = PlaneCollision(p_bot);
-        return f;
-    }
-    if (PlaneCollision(p_top) != 0) {
-        planeIndicator = 6;
-        f = PlaneCollision(p_top);
-        return f;
-    }
-
-    return 0;
-
-}
-
-float * CollisionResponse (float v[])
-{
-    float vn[3], vn_next[3], vt[3], vt_next[3];
-    static float v_next[3];
+    //printf("collision response function! %f,%f,%f\n",v[0],v[1],v[2]);
+    //printf("RESPONSE distance %f\n",d);
+    Vector3D vn;
     float vn_value = 0;
     
-    for (int i = 0; i < 3; i++) {
-        switch (planeIndicator) {
-            case 1:
-                vn_value += v[i] * p_front.normal[i];
-                vn[i] = vn_value * p_front.normal[i];
-                break;
-            case 2:
-                vn_value += v[i] * p_back.normal[i];
-                vn[i] = vn_value * p_back.normal[i];
-                break;
-            case 3:
-                vn_value += v[i] * p_right.normal[i];
-                vn[i] = vn_value * p_right.normal[i];
-                break;
-            case 4:
-                vn_value += v[i] * p_left.normal[i];
-                vn[i] = vn_value * p_left.normal[i];
-                break;
-            case 5:
-                vn_value += v[i] * p_bot.normal[i];
-                vn[i] = vn_value * p_bot.normal[i];
-                break;
-            case 6:
-                vn_value += v[i] * p_top.normal[i];
-                vn[i] = vn_value * p_top.normal[i];
-                break;
-            default:
-                break;
-        }
-        //compute vt
-        vt[i] = v[i] - vn[i];
-        //compute elasticity
-        vn_next[i] = - e * vn[i];
-        //compute friction
-        vt_next[i] = ( 1 - miu) * vt[i];
-        v_next[i] = vn_next[i] + vt_next[i];
-    }
-
-    return v_next;
+    
+//    if (normal == p_polygen.normal && point == p_polygen.point)
+//    {
+//        Point3D pc, p0c, p1c, p2c;
+//        Vector3D a0, a1, a2;
+//        float sign_a0 = 0, sign_a1 = 0, sign_a2 = 0;
+//        
+//        pc = p + d*p_polygen.normal;
+//        p0c = vertices[0] - pc;
+//        p1c = vertices[1] - pc;
+//        p2c = vertices[2] - pc;
+//        
+//        
+//        //printf("pc %f %f %f",pc[0],pc[1],pc[2]);
+//        a0.x = p1c.y*p2c.z - p1c.z*p2c.y;
+//        a0.y = -p1c.x*p2c.y + p1c.z*p2c.x;
+//        a0.z = p1c.x*p2c.y - p1c.y*p2c.x;
+//        
+//        a1.x = p2c.y*p0c.z - p2c.z*p0c.y;
+//        a1.y = -p2c.x*p0c.z + p2c.z*p0c.x;
+//        a1.z = p2c.x*p0c.y - p2c.y*p0c.x;
+//        
+//        a2.x = p0c.y*p1c.z - p0c.z*p1c.y;
+//        a2.y = -p0c.x*p1c.z + p0c.z*p1c.x;
+//        a2.z = p0c.x*p1c.y - p0c.y*p1c.x;
+//        
+//        
+//        sign_a0 = Dot(a0, p_polygen.normal);
+//        sign_a1 = Dot(a1, p_polygen.normal);
+//        sign_a2 = Dot(a2, p_polygen.normal);
+//        
+//        
+//        //printf("sign %f %f %f\n",sign_a0, sign_a1, sign_a2);
+//        if ((sign_a0 >= 0 && sign_a1 >= 0 && sign_a2 >= 0)||(sign_a0 <= 0 && sign_a1 <= 0 && sign_a2 <= 0)) {
+//            p = p + (1+e)*d*p_polygen.normal;
+//            vn_value = Dot(v, p_polygen.normal);
+//            vn = fabsf(vn_value) * p_polygen.normal;
+//            v = (1+e) * vn + v;
+//        }
+//        
+//        
+//    }else{
+    
+        p = p + (1+e)*d*normal;
+        vn_value = Dot(v, normal);
+        vn = fabsf(vn_value) * normal;
+        v = (1+e) * vn + v;
+    //}
 }
 
-float * computeAcceleration()
+void PlaneCollision(int n, Plane p)
+{
+    //printf("plan collision function!");
+    Vector3D s_vector_current(0,0,0);
+    Vector3D s_vector_next(0,0,0);
+    double DotProduct_current = 0 ;
+    double DotProduct_next = 0;
+    
+    s_vector_current = s_current.position[n] - p.point;
+    s_vector_next = s_next.position[n] - p.point;
+    DotProduct_current = Dot(s_vector_current, p.normal);
+    DotProduct_next = Dot(s_vector_next, p.normal);
+    //printf("vector next in plane collision %f \n",s_next.position[n][i]);
+    
+    //printf("dotproduct in plane collision %f \n",DotProduct_next);
+    
+    // Determine if it didnt collide
+    float d = 0;
+    if (( DotProduct_current >= 0 && DotProduct_next >= 0) || (DotProduct_current <= 0 && DotProduct_next <= 0))
+        d = 0;
+    else
+        d = fabsf(DotProduct_next);
+    // distance of xi+1 to the plane
+    
+    //printf("distance in plane collision %f \n",d);
+    if (d != 0) {
+        //compute new velocity and position
+        CollisionResponse( d, s_next.position[n], s_next.velocity[n],p.normal,p.point );
+        
+    }
+    
+}
+
+void SphereCollision(int n, Sphere s, int outward)
+{
+    Vector3D s_vector_current(0,0,0);
+    Vector3D s_vector_next(0,0,0);
+    Point3D point;
+    Vector3D normal;
+    point= s.radius * ((s_current.position[n]-s.center).Normalize());
+    if (outward == 1)
+        normal = (s_current.position[n]-s.center).Normalize();
+    else
+        normal = -(s_current.position[n]-s.center).Normalize();
+    
+    float dist_current;
+    float dist_next;
+    s_vector_current = (s_current.position[n] - point);
+    s_vector_next = (s_next.position[n] - point);
+    dist_current = Dot(s_vector_current, normal);
+    dist_next = Dot(s_vector_next, normal);
+    float d = 0;
+    if (( dist_current >= 0 && dist_next >= 0) || (dist_current <= 0 && dist_next <= 0))
+        d = 0;
+    else
+        d = fabsf(dist_next);
+    
+    if (d != 0) {
+        CollisionResponse( d, s_next.position[n], s_next.velocity[n], normal, point);
+        s_next.color[n].Set(0.5, 0.5, 0.5);
+
+    }
+}
+
+void CollisionDetection(int n)
+{
+    
+    //printf("collision detect function!");
+    
+    //PlaneCollision(n,p_polygen);
+    //PlaneCollision(n,p_front);
+    //PlaneCollision(n,p_back);
+    //PlaneCollision(n,p_right);
+    //PlaneCollision(n,p_left);
+    //PlaneCollision(n,p_top);
+    //PlaneCollision(n,p_bot);
+    SphereCollision(n, s_inner,1);
+    SphereCollision(n, s_outer,0);
+    
+}
+
+Vector3D steering(int n, Sphere s)
+{
+    Vector3D xc;
+    Vector3D vi;
+    Vector3D vt;
+    Vector3D accel(0,0,0);
+    float distance;
+    float T;
+    
+    xc = s.center - s_current.position[n];
+    distance = fabsf(Magnitude(xc) - s.radius);
+    vi = Dot(s_current.velocity[n], xc.Normalize()) * xc.Normalize();
+    T = distance/Magnitude(vi);
+    vt = s_current.velocity[n] - vi;
+    if (T * Magnitude(vt) < s.radius) {
+        accel = 2*(s.radius - T*Magnitude(vt))/(T*T) * vt.Normalize();
+    }
+    return accel;
+}
+
+Vector3D computeAcceleration(int n)
 {
     Force gravity;
     Force airResist;
     Force wind;
-    static float acceleration[3] = { 0, 0, 0 };
-    if (windExist) {
-        wind.value[0] = 0.5;
-        wind.value[1] = 0;
-        wind.value[2] = 0;
-    }else{
-    wind.value[0] = 0;
-    wind.value[1] = 0;
-    wind.value[2] = 0;
-    }
-    gravity.value[0] = 0;
-    gravity.value[1] = - mass * g;
-    gravity.value[2] = 0;
+    Force fAvoidance;
+    Force fVmatch;
+    Force fCentering;
+    Vector3D acceleration( 0, 0, 0 );
     
-    for (int i = 0; i < 3; i++) {
-        airResist.value[i] = - d * s_current.velocity[i];
-        acceleration[i] = (wind.value[i]+gravity.value[i]+airResist.value[i]) / mass;
+    //gravity towards center
+    Point3D center;
+    Vector3D ag;
+    Vector3D u;
+    float r;
+    center.Set(s_inner.center.x, s_inner.center.y, s_inner.center.z);
+    if (n != -1) {
+        u = (s_current.position[n] - center).Normalize();
+        //printf("%f\t",s_current.position[n].x);
+        //printf("%f %f %f\n",u.x,u.y,u.z);
+        
+        r = SquaredMag((s_current.position[n] - center));
+        ag = - g* (s_current.mass/(r))*u;
+        
+        gravity.accel = ag;
+        
+        wind.value.Set(0, 0, 0);
+        airResist.value = - ad * s_current.velocity[n];
+        acceleration = gravity.accel + (airResist.value+wind.value) / s_current.mass;
+        
+        //flocking
+        fAvoidance.accel.Set(0, 0, 0);
+        fVmatch.accel.Set(0, 0, 0);
+        fCentering.accel.Set(0, 0, 0);
+        
+        
+        for (int i = 0; i<N; i++) {
+            Vector3D xij;
+            float dij;
+            Vector3D uij;
+            xij = s_current.position[i] - s_current.position[n];
+            dij = Magnitude(xij);
+            //printf("%f\t",dij);
+            
+            uij = xij/dij;
+            //printf("uij %f\n",uij.x);
+            
+            if ( (dij != 0) && (dij<0.6) ) {
+                fAvoidance.accel += (- ka * (1/(dij)) *uij);
+                
+                fVmatch.accel += kv *exp(-dij)* (s_current.velocity[i] - s_current.velocity[n]);
+                fCentering.accel += kc *exp(-dij)* xij;
+            }
+        }
+        //lead
+        fCentering.accel += kl * (lead_current.position - s_current.position[n]);
+        //STEERING
+        acceleration += steering(n, s_inner);
+        acceleration += fAvoidance.accel + fVmatch.accel + fCentering.accel;
+    }else{
+        u = (lead_current.position - center).Normalize();
+        
+        r = SquaredMag((lead_current.position - center));
+        ag = - g* (lead_current.mass/(r))*u;
+        
+        gravity.accel = ag;
+        
+        wind.value.Set(0, 0, 0);
+        airResist.value = - ad * lead_current.velocity;
+        acceleration = gravity.accel + (airResist.value + wind.value) / lead_current.mass;
+
     }
+    
     return acceleration;
     
     
+    
 }
 
-float toleranceControl(double h)
+int restingContact( Vector3D position, Vector3D velocity, Vector3D accel)
 {
-    float tolerance;
-    float accel_value;
-    accel_value =
-    sqrtf(acceleration[0] * acceleration[0] +acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]);
-//    tolerance = 0.1 / powf(0.1,(accel_value *h));
-    if (h *accel_value < 0.1) {
-        tolerance = 0.001;
-    }
-    else if (h *accel_value<0.2) {
-        tolerance = 0.05;
-    }else if (h *accel_value<0.5) {
-        tolerance = 0.1;
-    }else if (h *accel_value<0.7) {
-        tolerance = 0.5;
-    }else if (h *accel_value<0.9)
-        tolerance = 0.7;
-    else
-        tolerance = 0.85;
-    return tolerance;
-}
-
-void restingContact()
-{
-
-    //printf("tolerance %f",tolerance);
-    tolerance = toleranceControl(h);
-    //printf("tolerance %f",tolerance);
-
-    float v_x = s_current.velocity[0];
-    float v_y = s_current.velocity[1];
-    float v_z = s_current.velocity[2];
-
-    float v = sqrtf(v_x*v_x + v_y*v_y + v_z*v_z);
+    
+    
+    float v = SquaredMag(velocity);
     
     //front
-    if ((fabsf (s_current.position[2] - (float)size)) < tolerance) {
+    if ((abs (position.z - size)) < tolerance) {
         GLboolean noVelocity = GL_TRUE;
-        if (v > tolerance)
+        if (v > vtolerance)
             noVelocity = GL_FALSE;
         if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += acceleration[i] *p_front.normal[i];
+            float DotProduct = accel *p_front.normal;
             if (DotProduct < 0) {
-                restart();
+                return 1;
             }
         }
     }
     //back
-    if ((fabsf (- s_current.position[2] - (float)size)) < tolerance) {
+    if ((abs (- position.z - size)) < tolerance) {
         GLboolean noVelocity = GL_TRUE;
-        if (v > tolerance)
+        if (v > vtolerance)
             noVelocity = GL_FALSE;
         if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += acceleration[i] *p_back.normal[i];
+            float DotProduct = accel *p_back.normal;
             if (DotProduct < 0) {
-                restart();
+                return 1;
             }
         }
     }
     //right
-    if ((fabsf (s_current.position[0] - (float)size)) < tolerance) {
+    if ((abs (position.x - size)) < tolerance) {
         GLboolean noVelocity = GL_TRUE;
-
-        if (v > tolerance)
+        
+        if (v > vtolerance)
             noVelocity = GL_FALSE;
         if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += acceleration[i] *p_right.normal[i];
+            float DotProduct = accel *p_right.normal;
             if (DotProduct < 0) {
-                restart();
+                return 1;
             }
         }
     }
     //left
-    if ((fabsf (- s_current.position[0] - (float)size)) < tolerance) {
+    if ((abs (-position.x - size)) < tolerance) {
         GLboolean noVelocity = GL_TRUE;
-
-        if (v > tolerance)
+        
+        if (v > vtolerance)
             noVelocity = GL_FALSE;
         if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += acceleration[i] *p_left.normal[i];
+            float DotProduct = accel *p_left.normal;
             if (DotProduct < 0) {
-                restart();
+                return 1;
             }
         }
     }
     //bot
-    if ((fabsf (- s_current.position[1] - (float)size)) < tolerance) {
-        //printf("current timestep %f",h);
-        //printf("v value %f",v);
+    if ((abs (- position.y - size)) < tolerance) {
+        //printf("checking bottom plane");
         GLboolean noVelocity = GL_TRUE;
-        if (v > tolerance)
+        
+        if (v > vtolerance)
             noVelocity = GL_FALSE;
         if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += acceleration[i] *p_bot.normal[i];
+            float DotProduct = accel *p_bot.normal;
             if (DotProduct < 0) {
-                restart();
+                return 1;
             }
         }
     }
     //top
-    if ((abs (s_current.position[1] - (float)size)) < tolerance) {
+    if ((abs (position.y - size)) < tolerance) {
         GLboolean noVelocity = GL_TRUE;
-
-        if (v > tolerance)
+        
+        if (v > vtolerance)
             noVelocity = GL_FALSE;
         if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += acceleration[i] *p_top.normal[i];
+            float DotProduct = accel *p_top.normal;
             if (DotProduct < 0) {
-                restart();
+                return 1;
             }
         }
     }
+    return 0;
+
 }
 
 void update()
 {
-    float *accel;
-    double timestepremain = h;
-    State s_c;
-    float * v_next;
-    
-    while (timestepremain > 0) {
+    lead_accel = computeAcceleration(-1);
+    //printf("here accel %f\t",lead_accel[0]);
+
+    //lead_next.velocity = lead_current.velocity + lead_accel * h;
+    //lead_next.position = lead_current.position + lead_current.velocity * h;
+    lead_next.position.Set(size*4*(mousex-WIDTH/2)/WIDTH, size*4*(HEIGHT/2- mousey)/HEIGHT, 0);
+    lead_next.color = lead_current.color;
+    lead_next.mass = lead_current.mass;
+    if (((int)round(t) % 6) < 3) {
+        kc += 0.0001;     //flocking centering factor
+    }else {
+        kc -= 0.0001;
+    }
+    for (int n=0; n<N; n++) {
+        
         //compute acceleration
-        accel = computeAcceleration();
-        for (int i=0; i<3; i++) {
-            acceleration[i] = accel[i];
-        }
+        acceleration[n] = computeAcceleration(n);
+        
         //integrate to get new state
-        for (int i=0; i<3; i++) {
-            s_next.velocity[i] = s_current.velocity[i] + acceleration[i] * h;
-            s_next.position[i] = s_current.position[i] + s_current.velocity[i] * h;
+        s_next.velocity[n] = s_current.velocity[n] + acceleration[n] * h;
+        s_next.position[n] = s_current.position[n] + s_current.velocity[n] * h;
+        if (((int)round(t) % 10) < 5) {
+            s_next.color[n].y = s_current.color[n].y + Magnitude(s_current.velocity[n]) *h/10.0;
+            s_next.color[n].x = s_current.color[n].x - Magnitude(s_current.velocity[n]) *h/5.0;
+            s_next.color[n].z = s_current.color[n].z + Magnitude(s_current.velocity[n]) *h/10.0;
+        }else {
+            s_next.color[n].y = s_current.color[n].y - Magnitude(s_current.velocity[n])*h/10.0;
+            s_next.color[n].x = s_current.color[n].x + Magnitude(s_current.velocity[n])*h/5.0;
+            s_next.color[n].z = s_current.color[n].z - Magnitude(s_current.velocity[n])*h/10.0;
         }
+        s_next.mass = s_current.mass;
+        //printf("next position for %d is %f", n, s_next.position[n][0]);
         
         //check for collision
-        float f = CollisionDetection(); //fraction of timestep
+        CollisionDetection(n);
         
-        if (f != 0) {
-            for (int i=0; i<3; i++) {
-                //get collision state
-                s_c.velocity[i] = s_current.velocity[i] + acceleration[i] * h * f;
-                s_c.position[i] = s_current.position[i] + s_current.velocity[i] * h * f;
-                //compute new position
-                s_next.position[i] = s_c.position[i];
-            }
-            //compute new velocity
-            v_next = CollisionResponse( s_c.velocity );
-            for (int i=0; i<3; i++) {
-                s_next.velocity[i] = v_next[i];
-            }
-            
-            timestepremain = f * timestepremain;
-            
-        }else{
-            timestepremain = 0;
-        }
-        
-        //update state
-        s_current = s_next;
-        t += h;
-        for (int i=0; i<3; i++) {
-            tranPos[i] = s_current.position[i];
-        }
-        restingContact();
-    
     }
+    
+    //update state
+    lead_current = lead_next;
+    s_current = s_next;
+    t += h;
+    for (int n=0; n<N; n++) {
+        tranPos[n] = s_current.position[n];
+        
+        int outOfBox = 0;
+        if (fabsf(s_current.position[n].x) > 2 || fabsf(s_current.position[n].y) > 2 || fabsf(s_current.position[n].z) > 2)
+            outOfBox = 1;
+//        int stopped = restingContact(s_current.position[n],s_current.velocity[n],acceleration[n]);
+//        if (stopped == 1 || outOfBox == 1) {
+//            initialization(n);
+//        }
+    }
+   
+    
 }
 
-void idle() {        
-    
-    glutSetWindow(main_window);
-    
-    if (!paused) {
+void idle() {
     double start = t;
     clock_t start_time = clock();
     update();
@@ -614,31 +635,48 @@ void idle() {
     while (((double)(clock()) - start_time) / CLOCKS_PER_SEC < tau)
         ;
     glutPostRedisplay();
-    }
-    //sleep (100);
     
 }
+
 
 void display()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);//clear buffer
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
- 	gluLookAt(posx, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);//isometric view
-    
-    // BALL
-    // Add a sphere to the scene.
-    ball();
+ 	gluLookAt(posx, posy, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);//isometric view
     
     // BOX
+    //glPushMatrix();
+    //glDepthMask(GL_FALSE);
     box();
-
+    
+    //glPopMatrix();
+    
+    //lead
+    glPointSize(5);
+    glBegin(GL_POINTS);
+    glColor3f(lead_current.color.x, lead_current.color.y, lead_current.color.z);
+    glVertex3f(lead_current.position.x, lead_current.position.y, lead_current.position.z);
+    glEnd();
+    
+    // particles
+    // Add particles to the scene.
+    glPointSize(2);
+    glBegin(GL_POINTS);
+    for (int n=0; n<N; n++) {
+        glColor3f(s_current.color[n].x,s_current.color[n].y,s_current.color[n].z);
+        glVertex3f(tranPos[n].x, tranPos[n].y, tranPos[n].z);
+        //printf("POSITION OF %d is %f/%f/%f",n,tranPos[n][0], tranPos[n][1], tranPos[n][2]);
+    }
+    glEnd();
+    
+    
     
 	glutSwapBuffers();
 }
 
-void reshape(GLint w, GLint h)
-{
+void reshape(GLint w, GLint h) {
     glViewport(0, 0, w, h);
     glMatrixMode(GL_PROJECTION);
     GLfloat aspect = w/h;
@@ -651,14 +689,12 @@ void reshape(GLint w, GLint h)
         glOrtho(-4*aspect, 4*aspect, -4, 4, -10.0, 10.0);
     }
     glMatrixMode(GL_MODELVIEW);
-
+    
 }
 
 void mymouse(int btn,int state,int x,int y)
 {
-    if(btn==GLUT_LEFT_BUTTON && state == GLUT_DOWN){
-        paused = !paused;
-    }
+    
 }
 
 void keyboard(int key, int xx, int yy) {
@@ -669,147 +705,68 @@ void keyboard(int key, int xx, int yy) {
         case GLUT_KEY_RIGHT:
             posx += 0.1;
             break;
+        case GLUT_KEY_UP:
+            posy += 0.1;
+            break;
+        case GLUT_KEY_DOWN:
+            posy -= 0.1;
+            break;
         default:
             break;
     }
+}
+void passive(int x1,int y1) {
+    mousex=x1; mousey=y1;
+    //printf("x %f y %f\n",mousex,mousey);
 }
 
-void gluicallback(int control) {
-    switch (control) {
- 
-        case 1:
-            randomVelocity = GL_TRUE;
-            break;
-        case 2:
-            if (disL->get_float_val() == 0) {
-                frames_per_second = 10;
-            }else if (disL->get_float_val() ==1){
-                frames_per_second = 30;
-            }else {
-                frames_per_second = 60;
-            }
-            break;
-        case -1:
-            restart();
-            break;
-        default:
-            break;
-    }
-       
-}
 void init() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glClearColor(1.0, 1.0, 1.0, 1.0);
+    glClearColor(0.1, 0.1, 0.1, 1.0);
+    quadratic = gluNewQuadric();
     
-    
-    glLightfv(GL_LIGHT0, GL_AMBIENT, black);
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, white);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, white);
-    glLightfv(GL_LIGHT0, GL_POSITION, direction);
-    glEnable(GL_NORMALIZE);
-    
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    
-    glEnable(GL_LIGHTING);                // so the renderer considers light
-    glEnable(GL_LIGHT0);                  // turn LIGHT0 on
+    //    glLightfv(GL_LIGHT0, GL_AMBIENT, black);
+    //    glLightfv(GL_LIGHT0, GL_DIFFUSE, white);
+    //    glLightfv(GL_LIGHT0, GL_SPECULAR, white);
+    //    glLightfv(GL_LIGHT0, GL_POSITION, direction);
+    //    glEnable(GL_NORMALIZE);
+    //
+    //    glMatrixMode(GL_MODELVIEW);
+    //    glLoadIdentity();
+    //
+    //    glEnable(GL_LIGHTING);                // so the renderer considers light
+    //    glEnable(GL_LIGHT0);                  // turn LIGHT0 on
     glEnable(GL_DEPTH_TEST);              // so the renderer considers depth
     
-    //set initial state
-    initialization();
-
+    initPlaneNormal();
+    //s_current = s_initial;
+    
 }
+
+
 
 
 // The usual main function.
 int main(int argc, char** argv) {
     glutInit(&argc, argv);
+    
+    //set initial state
+    srand ((unsigned int)time(0));
+    initialization();
 
     glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowPosition(80, 80);
     glutInitWindowSize(WIDTH, HEIGHT);
-    main_window = glutCreateWindow("Bouncing Ball");
+    glutCreateWindow("Particle Systems");
     glShadeModel(GL_FLAT);
-    glutMouseFunc(mymouse);
-    glutSpecialFunc(keyboard);
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
- 
+    glutMouseFunc(mymouse);
+    glutSpecialFunc(keyboard);
+    glutIdleFunc(idle);
+    glutPassiveMotionFunc(passive);
 
     init();
-    //  pointer to a GLUI window
-    GLUI * glui_window;
     
-    //  Create GLUI window
-    glui_window = GLUI_Master.create_glui ("Options");
-    
-    GLUI_Panel *bp_panel = glui_window->add_panel ("Ball Properties");
-    vmaxField = glui_window->add_edittext_to_panel(bp_panel, "max velocity",GLUI_EDITTEXT_FLOAT);
-    vmaxField->set_float_limits(0, 10);
-    vmaxField->set_float_val(v_max);
-    glui_window->add_separator_to_panel(bp_panel);
-
-    vx = glui_window->add_spinner_to_panel(bp_panel, "initial vx",GLUI_SPINNER_FLOAT);
-    vx->set_float_limits(-v_max, v_max);
-    vx->set_speed(0.01);
-    
-    vy = glui_window->add_spinner_to_panel(bp_panel, "initial vy",GLUI_SPINNER_FLOAT);
-    vy->set_float_limits(-v_max, v_max);
-    vy->set_speed(0.01);
-
-    vz = glui_window->add_spinner_to_panel(bp_panel, "initial vz",GLUI_SPINNER_FLOAT);
-    vz->set_float_limits(-v_max, v_max);
-    vz->set_speed(0.01);
-
-    glui_window->add_button_to_panel(bp_panel, "Random",1,gluicallback);
-    
-    glui_window->add_separator_to_panel(bp_panel);
-    
-    m = glui_window->add_spinner_to_panel(bp_panel, "mass",GLUI_SPINNER_FLOAT);
-    m->set_float_limits(0, 10);
-    m->set_speed(0.1);
-    m->set_float_val(mass);
-    r = glui_window->add_spinner_to_panel(bp_panel, "radius",GLUI_SPINNER_FLOAT);
-    r->set_float_limits(0, 1);
-    r->set_speed(0.1);
-    r->set_float_val(radius);
-    
-    GLUI_Panel *sp_panel = glui_window->add_panel ("Simulation Properties");
-    timeS = glui_window->add_spinner_to_panel(sp_panel, "time step size",GLUI_SPINNER_FLOAT);
-    timeS->set_float_limits(0, 1);
-    timeS->set_speed(0.01);
-    timeS->set_float_val(h);
-    disL = glui_window->add_radiogroup_to_panel(sp_panel,NULL,2,gluicallback);
-    new GLUI_RadioButton(disL, "10 fps");
-    new GLUI_RadioButton(disL, "30 fps");
-    new GLUI_RadioButton(disL, "60 fps");
-    disL->set_int_val(1);
-
-    GLUI_Panel *ep_panel = glui_window->add_panel ("Environment Properties");
-    windBox = glui_window->add_checkbox_to_panel(ep_panel, "Wind");
-    windBox->set_int_val(0);
-    gField = glui_window->add_edittext_to_panel(ep_panel, "gravity constant",GLUI_EDITTEXT_FLOAT);
-    gField->set_float_limits(0, 10);
-    gField->set_float_val(g);
-    
-    dField = glui_window->add_edittext_to_panel(ep_panel, "airresis constant",GLUI_EDITTEXT_FLOAT);
-    dField->set_float_limits(0, 5);
-    dField->set_float_val(d);
-
-    eField = glui_window->add_edittext_to_panel(bp_panel, "Elasticity factor",GLUI_EDITTEXT_FLOAT);
-    eField->set_float_limits(0, 1.5);
-    eField->set_float_val(e);
-
-    miuField = glui_window->add_edittext_to_panel(bp_panel, "Friction factor",GLUI_EDITTEXT_FLOAT);
-    miuField->set_float_limits(0, 1);
-    miuField->set_float_val(miu);
-
-    
-    glui_window->add_button("Restart",-1, gluicallback);
-    glui_window->add_button("Quit",0, (GLUI_Update_CB)exit);
-
-    GLUI_Master.sync_live_all();
-    GLUI_Master.set_glutIdleFunc (idle);
-    glui_window->set_main_gfx_window (main_window);
     glutMainLoop();
 }

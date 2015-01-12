@@ -4,7 +4,7 @@
 <dict>
 	<key>SchemeUserState</key>
 	<dict>
-		<key>Particle System.xcscheme</key>
+		<key>Springy.xcscheme</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>0</integer>
@@ -12,7 +12,7 @@
 	</dict>
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
-		<key>C6ACA41117FB184700D971DA</key>
+		<key>C676096D18242B3800A19ABB</key>
 		<dict>
 			<key>primary</key>
 			<true/>

@@ -1,686 +1,1342 @@
 //
-//  main.c
-//  ParticleSystem
+//  main.cpp
+//  Springy
 //
-//  Created by Uriana on 9/28/13.
+//  Created by Uriana on 13-11-1.
 //  Copyright (c) 2013 Uriana. All rights reserved.
 //
 
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <iostream>
 #include <time.h>
+#include <vector>
+#include <GLUI/glui.h>
 
-#ifdef __APPLE__
-#  include <GLUI/glui.h>
-#else
-#  include <GL/glui.h>
-#endif
+#include "Vector3D.h"
+#include "EulerIntegration.h"
+#include "RK4Integration.h"
+#include "ForceAir.h"
+#include "ForceSpring.h"
+#include "definition.h"
 
 #define WIDTH 800
 #define HEIGHT 600
 
-#define N 200     //number of particles
-#define PI 3.141592654
-
-//used colors
-GLfloat black[] = { 0.0, 0.0, 0.0, 1.0 };
-GLfloat yellow[] = { 1.0, 1.0, 0.0, 1.0 };
-GLfloat pink[] = { 0.9, 0.4, 0.4, 1.0 };
-GLfloat cyan[] = { 0.0, 1.0, 1.0, 1.0 };
-GLfloat white[] = { 1.0, 1.0, 1.0, 1.0 };
-GLfloat direction[] = { 1.0, 1.0, 1.0, 0.0 };
-
-
-
-//structures
-typedef struct {
-    float position[N][3];
-    float velocity[N][3];
-    float color[N][3];
-    int lifespan[N];
-}State;
-
-typedef struct {
-    float value[3];
-}Force;
-
-typedef struct {
-    float normal[3];
-    float point[3];
-    
-}Plane;
-
-//public variables
-State s_initial, s_current, s_next;
-Plane p_left, p_right, p_bot, p_top, p_back, p_front, p_polygen;
-float acceleration[N][3];
-
-float tranPos[N][3];     //translating position
-double timestep;             // simulation time
-int planeIndicator;     //which plane it collides
-
-//public defined parameters
-double size = 2;        //the size of the box
-float vertices[3][3];   //vertices of polygen
-double v_max = 1;     // maximum initial speed of ball
-double x_max = 1;       // maximum initial position of ball
-double c_max = 0.5;
-
-float mass = 1;     //mass of ball
-float g = 1;        //gravity
-float ad = 0.1;      //air resistance factor
-float e = 0.5;      //elasticity factor
-float miu = 0.5;    //friction factor
-
-
-double h = 0.01;     // time step for Euler Integration
-double frames_per_second = 30;   // display rate
-
-float tolerance = 0.01;    // position error tolerance
-float vtolerance = 0.15;     // velocity tolerance
+#define N 512
+#define SIZE 8
+#define pi 3.1415926
 
 GLfloat posx = -1.0;    //camera position
 GLfloat posy = 1.0;    //camera position
-GLUquadricObj *quadratic;
+double frames_per_second = 30;   // display rate
+double size = 2;        //the size of the box
 
-double gaussrand()
+
+EulerIntegration ei(0.01);
+//RK4Integration rk(0.001);
+struct RK4world jello;
+
+bool isEuler = true;
+float factor = 10;
+static int collided=0;
+float RK4time;
+
+std::vector<Particle *> s(N);
+std::vector<Particle *> s_next(N);
+Point3D pos[SIZE][SIZE][SIZE];
+Vector3D vel[SIZE][SIZE][SIZE];
+World w;
+
+
+// camera parameters tweaked for a good first look
+double Theta = 0.3136 ;
+double Phi   = 0.7136 ;
+double R     = 4.6    ;
+
+// mouse control
+int g_iMenuId;
+int g_vMousePos[2];
+int g_iLeftMouseButton  ,
+g_iMiddleMouseButton,
+g_iRightMouseButton ;
+// these variables control what is displayed on screen
+int shear            = 0,
+bend             = 0,
+structural       = 1,
+doPause          = 0,
+viewingMode      = 1,
+saveScreenToFile = 0;
+
+
+struct index
 {
-	static double U, V;
-	static int phase = 0;
-	double Z;
+    int i;
+    int j;
+    int k;
+};
+
+
+using namespace std;
+
+void initialize()
+{
+    float mass = 0.5;
+
     
-	if(phase == 0) {
-		U = (rand() + 1.) / (RAND_MAX + 2.);
-		V = rand() / (RAND_MAX + 1.);
-		Z = sqrt(-2 * log(U)) * sin(2 * PI * V);
-	} else
-		Z = sqrt(-2 * log(U)) * cos(2 * PI * V);
+    //for (int n = 0; n < N; n++) {
+        for (int i = 0; i < SIZE; i++) {
+            for (int j = 0; j < SIZE; j++) {
+                for (int k = 0; k < SIZE; k++) {
+                    int n = i*SIZE*SIZE + j*SIZE + k;
+                    Particle *p = new Particle(Point3D((float)i/SIZE,(float)j/SIZE+1,(float)k/SIZE), Vector3D(0,1,0), mass, Point3D(0.5,0.5,0.5));
+                    //printf("%f \t",p->getPosition().x);
+                    s[n] = p;
+                    pos[i][j][k] = p->getPosition();
+                    vel[i][j][k] = p->getVelocity();
+                    jello.p[i][j][k] = pos[i][j][k];
+                    jello.v[i][j][k] = vel[i][j][k];
+
+                    Particle *p_init = new Particle();
+                    s_next[n] = p_init;
+                }
+            }
+        }
     
-	phase = 1 - phase;
+        
     
-	return Z;
+    w.addObstacle(new ObstaclePlane(Vector3D(0, 1, 0), Point3D(0, -2, 0)));
+    w.addObstacle(new ObstaclePlane(Vector3D(0, -1, 0), Point3D(0, 2, 0)));
+    w.addObstacle(new ObstaclePlane(Vector3D(0, 0, 1), Point3D(0, 0, -2)));
+    w.addObstacle(new ObstaclePlane(Vector3D(0, 0, -1), Point3D(0, 0, 2)));
+    w.addObstacle(new ObstaclePlane(Vector3D(1, 0, 0), Point3D(-2, 0, 0)));
+    w.addObstacle(new ObstaclePlane(Vector3D(-1, 0, 0), Point3D(2, 0, 0)));
+
 }
 
-float * crossProduct(float u[], float v[])
+void computeStructForces(int pti, int ptj, int ptk, Vector3D &Fstruct)
 {
-    static float cp[3];
-    cp[0] = u[1]*v[2] - u[2]*v[1];
-    cp[1] = -u[0]*v[2] + u[2]*v[0];
-    cp[2] = u[0]*v[1] - u[1]*v[0];
-    return cp;
+    //get the neighbour point indexes in neighbours list vector.
+    
+    vector<struct index> neighbours;
+    struct index curIndex;
+    
+    if(pti!=0)
+    {
+        curIndex.i = pti-1;
+        curIndex.j = ptj;
+        curIndex.k = ptk;
+        neighbours.push_back(curIndex);
+    }
+    if(pti!=7)
+    {
+        curIndex.i = pti+1;
+        curIndex.j = ptj;
+        curIndex.k = ptk;
+        neighbours.push_back(curIndex);
+    }
+    if(ptj!=0)
+    {
+        curIndex.i = pti;
+        curIndex.j = ptj-1;
+        curIndex.k = ptk;
+        neighbours.push_back(curIndex);
+    }
+    if(ptj!=7)
+    {
+        curIndex.i = pti;
+        curIndex.j = ptj+1;
+        curIndex.k = ptk;
+        neighbours.push_back(curIndex);
+    }
+    if(ptk!=0)
+    {
+        curIndex.i = pti;
+        curIndex.j = ptj;
+        curIndex.k = ptk-1;
+        neighbours.push_back(curIndex);
+    }
+    if(ptk!=7)
+    {
+        curIndex.i = pti;
+        curIndex.j = ptj;
+        curIndex.k = ptk+1;
+        neighbours.push_back(curIndex);
+    }
+    
+    vector<struct index>::iterator iter;
+    Vector3D FtempStruct;      //force of 1 struct spring
+    
+    Fstruct.x = 0;
+    Fstruct.y = 0;
+    Fstruct.z = 0;
+    
+    FtempStruct.x = 0;
+    FtempStruct.y = 0;
+    FtempStruct.z = 0;
+    
+    //  iterate through neighbours
+    //  find force exerted by neighbour(i,j,k) on p(i,j,k)
+    for (iter = neighbours.begin(); iter!=neighbours.end(); iter++)
+    {
+        int ni,nj,nk; //neighbour i,j,k
+        ni = iter->i;
+        nj = iter->j;
+        nk = iter->k;
+        
+        ForceSpring f(pos[pti][ptj][ptk], pos[ni][nj][nk],vel[pti][ptj][ptk], vel[ni][nj][nk],factor,0.5,1.0/SIZE);
+        FtempStruct += f.value;
+    }
+    Fstruct = FtempStruct;
+
 }
 
-void box()
+void computeCrossForces(int pti, int ptj, int ptk, Vector3D &Fshear)
 {
+    vector<struct index> Shneighbours;
+    struct index curIndex;
+    
+    //i,j-1,k-1; i,j-1,k+1
+    if(ptj-1>=0)
+    {
+        if(ptk-1>=0)
+        {
+            curIndex.i = pti;
+            curIndex.j = ptj-1;
+            curIndex.k = ptk-1;
+            Shneighbours.push_back(curIndex);
+        }
+        if(ptk+1<=7)
+        {
+            curIndex.i = pti;
+            curIndex.j = ptj-1;
+            curIndex.k = ptk+1;
+            Shneighbours.push_back(curIndex);
+        }
+    }
+    //i,j+1,k-1;i,j+1,k+1
+    if(ptj+1<=7)
+    {
+        if(ptk-1>=0)
+        {
+            curIndex.i = pti;
+            curIndex.j = ptj+1;
+            curIndex.k = ptk-1;
+            Shneighbours.push_back(curIndex);
+        }
+        if(ptk+1<=7)
+        {
+            curIndex.i = pti;
+            curIndex.j = ptj+1;
+            curIndex.k = ptk+1;
+            Shneighbours.push_back(curIndex);
+        }
+    }
+    //i-1
+    if(pti-1>=0)
+    {
+        if(ptk-1>=0)
+        {
+            curIndex.i = pti-1;
+            curIndex.j = ptj;
+            curIndex.k = ptk-1;
+            Shneighbours.push_back(curIndex);
+        }
+        if(ptk+1<=7)
+        {
+            curIndex.i = pti-1;
+            curIndex.j = ptj;
+            curIndex.k = ptk+1;
+            Shneighbours.push_back(curIndex);
+        }
+        if(ptj-1>=0)
+        {
+            {   //i-1,j-1,k
+                curIndex.i = pti-1;
+                curIndex.j = ptj-1;
+                curIndex.k = ptk;
+                Shneighbours.push_back(curIndex);
+            }
+            if(ptk-1>=0)
+            {
+                curIndex.i = pti-1;
+                curIndex.j = ptj-1;
+                curIndex.k = ptk-1;
+                Shneighbours.push_back(curIndex);
+            }
+            if(ptk+1<=7)
+            {
+                curIndex.i = pti-1;
+                curIndex.j = ptj-1;
+                curIndex.k = ptk+1;
+                Shneighbours.push_back(curIndex);
+            }
+        }
+        if(ptj+1<=7)
+        {
+            {   //i-1,j+1,k
+                curIndex.i = pti-1;
+                curIndex.j = ptj+1;
+                curIndex.k = ptk;
+                Shneighbours.push_back(curIndex);
+            }
+            if(ptk-1>=0)
+            {
+                curIndex.i = pti-1;
+                curIndex.j = ptj+1;
+                curIndex.k = ptk-1;
+                Shneighbours.push_back(curIndex);
+            }
+            if(ptk+1<=7)
+            {
+                curIndex.i = pti-1;
+                curIndex.j = ptj+1;
+                curIndex.k = ptk+1;
+                Shneighbours.push_back(curIndex);
+            }
+        }
+    }
+    if(pti+1<=7)
+    {
+        if(ptk-1>=0)
+        {
+            curIndex.i = pti+1;
+            curIndex.j = ptj;
+            curIndex.k = ptk-1;
+            Shneighbours.push_back(curIndex);
+        }
+        if(ptk+1<=7)
+        {
+            curIndex.i = pti+1;
+            curIndex.j = ptj;
+            curIndex.k = ptk+1;
+            Shneighbours.push_back(curIndex);
+        }
+        if(ptj-1>=0)
+        {
+            {   //i+1,j-1,k
+                curIndex.i = pti+1;
+                curIndex.j = ptj-1;
+                curIndex.k = ptk;
+                Shneighbours.push_back(curIndex);
+            }
+            if(ptk-1>=0)
+            {
+                curIndex.i = pti+1;
+                curIndex.j = ptj-1;
+                curIndex.k = ptk-1;
+                Shneighbours.push_back(curIndex);
+            }
+            if(ptk+1<=7)
+            {
+                curIndex.i = pti+1;
+                curIndex.j = ptj-1;
+                curIndex.k = ptk+1;
+                Shneighbours.push_back(curIndex);
+            }
+        }
+        if(ptj+1<=7)
+        {
+            {   //i+1,j+1,k
+                curIndex.i = pti+1;
+                curIndex.j = ptj+1;
+                curIndex.k = ptk;
+                Shneighbours.push_back(curIndex);
+            }
+            if(ptk-1>=0)
+            {
+                curIndex.i = pti+1;
+                curIndex.j = ptj+1;
+                curIndex.k = ptk-1;
+                Shneighbours.push_back(curIndex);
+            }
+            if(ptk+1<=7)
+            {
+                curIndex.i = pti+1;
+                curIndex.j = ptj+1;
+                curIndex.k = ptk+1;
+                Shneighbours.push_back(curIndex);
+            }
+        }
+    }
+    vector<struct index>::iterator iter;
+    Vector3D FtempShear;
+    
+    Fshear.x = 0;
+    Fshear.y = 0;
+    Fshear.z = 0;
+    
+    FtempShear.x = 0;
+    FtempShear.y = 0;
+    FtempShear.z = 0;
+    
+    //iterate through shear neighbours
+    for (iter = Shneighbours.begin(); iter!=Shneighbours.end(); iter++)
+    {
+        int ni,nj,nk;
+        ni = iter->i;
+        nj = iter->j;
+        nk = iter->k;
+        
+        //Rest length of shear springs
+        double Rshlength1,Rshlength2;
+        Rshlength1 = sqrt(2) * 1/SIZE; //square diagonal
+        Rshlength2 = sqrt(3) * 1/SIZE; //cube diagonal
+        
+        if((abs(pti-ni)==1)&&(abs(ptj-nj)==1)&&(abs(ptk-nk)==1)) //cube diagonal
+        {
+            ForceSpring f(pos[pti][ptj][ptk], pos[ni][nj][nk],vel[pti][ptj][ptk], vel[ni][nj][nk],factor,0.5,Rshlength2);
+            FtempShear += f.value;
+        }
+        else {
+            ForceSpring f(pos[pti][ptj][ptk], pos[ni][nj][nk],vel[pti][ptj][ptk], vel[ni][nj][nk],factor,0.5,Rshlength1);
+            FtempShear += f.value;
+        }
+        Fshear = FtempShear;
+    }
+}
+
+void computeBendForces(int pti, int ptj, int ptk, Vector3D &Fbend)
+{
+    vector<struct index> Bneighbours;
+    struct index curIndex;
+    
+    if(pti>=2)
+    {
+        curIndex.i = pti-2;
+        curIndex.j = ptj;
+        curIndex.k = ptk;
+        Bneighbours.push_back(curIndex);
+    }
+    if(pti<=5)
+    {
+        curIndex.i = pti+2;
+        curIndex.j = ptj;
+        curIndex.k = ptk;
+        Bneighbours.push_back(curIndex);
+    }
+    if(ptj>=2)
+    {
+        curIndex.i = pti;
+        curIndex.j = ptj-2;
+        curIndex.k = ptk;
+        Bneighbours.push_back(curIndex);
+    }
+    if(ptj<=5)
+    {
+        curIndex.i = pti;
+        curIndex.j = ptj+2;
+        curIndex.k = ptk;
+        Bneighbours.push_back(curIndex);
+    }
+    if(ptk>=2)
+    {
+        curIndex.i = pti;
+        curIndex.j = ptj;
+        curIndex.k = ptk-2;
+        Bneighbours.push_back(curIndex);
+    }
+    if(ptk<=5)
+    {
+        curIndex.i = pti;
+        curIndex.j = ptj;
+        curIndex.k = ptk+2;
+        Bneighbours.push_back(curIndex);
+    }
+    
+    vector<struct index>::iterator iter;
+    Fbend.x = 0;
+    Fbend.y = 0;
+    Fbend.z = 0;
+    
+    Vector3D FtempBend;
+    FtempBend.x = 0;
+    FtempBend.y = 0;
+    FtempBend.z = 0;
+    
+    //iterate through bend neighbours
+    for (iter = Bneighbours.begin(); iter!=Bneighbours.end(); iter++)
+    {
+        //neighbour i,j,k
+        int ni,nj,nk;
+        ni = iter->i;
+        nj = iter->j;
+        nk = iter->k;
+        
+        double Rblength;
+        Rblength = 2.0/SIZE;
+        
+        ForceSpring f(pos[pti][ptj][ptk], pos[ni][nj][nk],vel[pti][ptj][ptk], vel[ni][nj][nk],factor,0.5,Rblength);
+        FtempBend += f.value;
+
+    }
+    Fbend = FtempBend;
+}
+
+Force applyForce()
+{
+    Force Ftotal;
+
+    //external forces
+    float gx = -0.0;
+    float gy = -1.0;
+    float gz = -0.3;
+
+    for (int n = 0; n < N; n++){
+        Force gravity(Vector3D(s[n]->getMass() * gx, s[n]->getMass() * gy, s[n]->getMass() * gz));
+        ForceAir air(s[n]->getVelocity());
+
+        gravity.addTo(*s[n]);
+        air.addTo(*s[n]);
+    }
+    
+    //edge forces
+    for(int i =0; i<SIZE; i++){
+        for(int j =0; j<SIZE; j++){
+            for(int k =0; k<SIZE; k++){
+                int n = i*SIZE*SIZE + j*SIZE + k;
+                Force Fstruct;
+                computeStructForces( i, j, k, Fstruct.value);
+                
+                Force Fshear;
+                computeCrossForces(i, j, k, Fshear.value);
+                
+                Force Fbend;
+                computeBendForces(i, j, k, Fbend.value);
+                
+                Ftotal.value = Fstruct.value + Fshear.value + Fbend.value;
+                // Keep the system stable by cutting the forces in half when it goes beyond control
+//                if((Ftotal.value.x>70)||(Ftotal.value.x<-70))
+//                    Ftotal.value.x/=2;
+//                
+//                if((Ftotal.value.y>70)||(Ftotal.value.y<-70))
+//                    Ftotal.value.y/=2;
+//                
+//                if((Ftotal.value.z>70)||(Ftotal.value.z<-70))
+//                    Ftotal.value.z/=2;
+                Ftotal.addTo(*s[n]);
+                
+            }
+        }
+    }
+    //face forces
+    return Ftotal;
+}
+void computeAcceleration(struct RK4world *jello, Vector3D a[SIZE][SIZE][SIZE])
+{
+    Force Ftotal = applyForce();
+    
+    for(int i =0; i<8; i++)
+        for(int j =0; j<8; j++)
+            for(int k =0; k<8; k++)
+            {
+                
+//                // check for collission with the box
+//                // if point was inside the box
+//                if(jello->inBox[i][j][k])
+//                {
+//                    collided = 0;
+//                    //check collision
+//                    if  ((jello->p[i][j][k].x<=-2)||(jello->p[i][j][k].x>=2) ||
+//                         (jello->p[i][j][k].y<=-2)||(jello->p[i][j][k].y>=2) ||
+//                         (jello->p[i][j][k].z<=-2)||(jello->p[i][j][k].z>=2)  )
+//                    {
+//                        //collided - point outside the box now
+//                        jello->inBox[i][j][k] = false;
+//                        collided++;
+//                        
+//                        //first collision for collision point
+//                        if (collided==1)
+//                        {
+//                            jello->pCollission[i][j][k].x =jello->p[i][j][k].x;
+//                            jello->pCollission[i][j][k].y =jello->p[i][j][k].y;
+//                            jello->pCollission[i][j][k].z =jello->p[i][j][k].z;
+//                        }
+//                    }
+//                }
+//                else // point was outside the box
+//                {
+//                    // check if point inside the box now
+//                    if((jello->p[i][j][k].x>=-2) && (jello->p[i][j][k].x<=2)&&
+//                       (jello->p[i][j][k].y>=-2) && (jello->p[i][j][k].y<=2)&&
+//                       (jello->p[i][j][k].z>=-2) && (jello->p[i][j][k].z<=2) )
+//                    {
+//                        jello->inBox[i][j][k] = true;
+//                    }
+//                    else
+//                        //point still outside, find force due to collission
+//                        //calculate elastic force between surface and current position
+//                        //create spring between pCollission[0][0][0] and current p[0][0][0]
+//                    {
+//                        Point3D L;
+//                        pDIFFERENCE(jello->p[i][j][k],jello->pCollission[i][j][k],L );
+//                        
+//                        //velocity difference for damping
+//                        Point3D       diffVel, vpCollision;
+//                        pMAKE      (0, 0, 0, vpCollision);
+//                        pDIFFERENCE(jello->v[i][j][k],vpCollision,diffVel );
+//                        
+//                        //length of L
+//                        double absL;
+//                        absL = sqrt((L).x * (L).x + (L).y * (L).y + (L).z * (L).z);
+//                        
+//                        //normal vector
+//                        Point3D Nfloor; //normal to floor
+//                        
+//                        //update Nfloor according to the colliding wall
+//                        if(jello->p[i][j][k].x<=-2)
+//                        {
+//                            pMAKE(1,0,0,Nfloor);
+//                        }
+//                        
+//                        else if(jello->p[i][j][k].x>=2)
+//                        {
+//                            pMAKE(-1,0,0,Nfloor);
+//                        }
+//                        
+//                        else if(jello->p[i][j][k].y<=-2)
+//                        {
+//                            pMAKE(0,1,0,Nfloor);
+//                        }
+//                        
+//                        else if(jello->p[i][j][k].y>=2)
+//                        {
+//                            pMAKE(0,-1,0,Nfloor);
+//                        }
+//                        
+//                        else if(jello->p[i][j][k].z<=-2)
+//                        {
+//                            pMAKE(0,0,1,Nfloor);
+//                        }
+//                        else if(jello->p[i][j][k].z>=2)
+//                        {
+//                            pMAKE(0,0,-1,Nfloor);
+//                        }
+//                        
+//                        //dot product for damping
+//                        double vDotL;
+//                        DOTPRODUCT(diffVel, L, vDotL);
+//                        
+//                        //collission force magnitude
+//                        double FcolMag;
+//                        FcolMag = jello->kCollision * absL;
+//                        
+//                        //collision force vector
+//                        Point3D FcolV;
+//                        pMULTIPLY(Nfloor, FcolMag, FcolV);
+//                        
+//                        //damping force magnitude
+//                        double FcolDamp;
+//                        FcolDamp = ( jello->dCollision * vDotL) / absL;
+//                        
+//                        //direction of Fdamp = Fdamp1 * normal of floor
+//                        Point3D FcolDampV;
+//                        pMULTIPLY(Nfloor, FcolDamp , FcolDampV);
+//                        pSUM     (FcolV , FcolDampV, FcolV    );
+//                        
+//                        //add collision force to total force
+//                        pSUM(Ftotal.value, FcolV, Ftotal.value);
+//                    }
+//                }
+                
+                
+                Point3D accel;
+                pMULTIPLY( Ftotal.value, (1/s[0]->getMass()), accel);
+                
+                // Keep the system stable by cutting the forces in half when it goes beyond control
+                if((Ftotal.value.x>70)||(Ftotal.value.x<-70))
+                    Ftotal.value.x/=2;
+                
+                if((Ftotal.value.y>70)||(Ftotal.value.y<-70))
+                    Ftotal.value.y/=2;
+                
+                if((Ftotal.value.z>70)||(Ftotal.value.z<-70))
+                    Ftotal.value.z/=2;
+                
+                //Update a[][][] matrix
+                a[i][j][k] = accel;
+            }
+}
+
+void RK4(struct RK4world *jello)
+{
+    for (int i = 0; i < SIZE; i++) {
+        for (int j = 0; j < SIZE; j++) {
+            for (int k = 0; k < SIZE; k++) {
+                int n = i*SIZE*SIZE + j*SIZE + k;
+
+                jello->p[i][j][k] = s[n]->getPosition();
+                jello->v[i][j][k] = s[n]->getVelocity();
+            }
+        }
+    }
+
+    Vector3D F1p[8][8][8], F1v[8][8][8],
+    F2p[8][8][8], F2v[8][8][8],
+    F3p[8][8][8], F3v[8][8][8],
+    F4p[8][8][8], F4v[8][8][8];
+    
+    Vector3D a[8][8][8];
+    
+    struct RK4world buffer;
+    int    i, j, k     ;
+    
+    // make a copy of jello
+    buffer = *jello;
+    
+    computeAcceleration(jello, a);
+    for(i=0; i<=7; i++)
+        for(j=0; j<=7; j++)
+            for(k=0; k<=7; k++)
+            {
+                pMULTIPLY(jello->v[i][j][k], jello->h, F1p[i][j][k]     );
+                pMULTIPLY(a[i][j][k]       , jello->h, F1v[i][j][k]     );
+                pMULTIPLY(F1p[i][j][k]     , 0.5      , buffer.p[i][j][k]);
+                pMULTIPLY(F1v[i][j][k]     , 0.5      , buffer.v[i][j][k]);
+                
+                pSUM (jello->p[i][j][k], buffer.p[i][j][k], buffer.p[i][j][k]);
+                pSUM (jello->v[i][j][k], buffer.v[i][j][k], buffer.v[i][j][k]);
+            }
+    
+    
+    computeAcceleration(&buffer, a);
+    for(i=0; i<=7; i++)
+        for(j=0; j<=7; j++)
+            for(k=0; k<=7; k++)
+            {
+                //    F2p = dt * buffer.v;
+                pMULTIPLY ( buffer.v[i][j][k], jello->h, F2p[i][j][k]     );
+                //    F2v = dt * a(buffer.p,buffer.v);
+                pMULTIPLY ( a[i][j][k]       , jello->h, F2v[i][j][k]     );
+                pMULTIPLY ( F2p[i][j][k]     , 0.5      , buffer.p[i][j][k]);
+                pMULTIPLY ( F2v[i][j][k]     , 0.5      , buffer.v[i][j][k]);
+                
+                pSUM(jello->p[i][j][k], buffer.p[i][j][k], buffer.p[i][j][k]);
+                pSUM(jello->v[i][j][k], buffer.v[i][j][k], buffer.v[i][j][k]);
+            }
+    
+    computeAcceleration(&buffer, a);
+    for(i=0; i<=7; i++)
+        for(j=0; j<=7; j++)
+            for(k=0; k<=7; k++)
+            {
+                //   F3p = dt * buffer.v;
+                pMULTIPLY(buffer.v[i][j][k], jello->h, F3p[i][j][k]     );
+                //   F3v = dt * a(buffer.p,buffer.v);
+                pMULTIPLY(a[i][j][k]       , jello->h, F3v[i][j][k]     );
+                pMULTIPLY(F3p[i][j][k]     , 0.5      , buffer.p[i][j][k]);
+                pMULTIPLY(F3v[i][j][k]     , 0.5      , buffer.v[i][j][k]);
+                
+                pSUM (jello->p[i][j][k], buffer.p[i][j][k], buffer.p[i][j][k]);
+                pSUM (jello->v[i][j][k], buffer.v[i][j][k], buffer.v[i][j][k]);
+            }
+    
+    computeAcceleration(&buffer, a);
+    for(i=0; i<=7; i++)
+        for(j=0; j<=7; j++)
+            for(k=0; k<=7; k++)
+            {
+                // F3p = dt * buffer.v;
+                pMULTIPLY (buffer.v[i][j][k], jello->h, F4p[i][j][k]);
+                // F3v = dt * a(buffer.p,buffer.v);
+                pMULTIPLY (a[i][j][k]       , jello->h, F4v[i][j][k]);
+                
+                pMULTIPLY (F2p[i][j][k], 2, buffer.p[i][j][k]        );
+                pMULTIPLY (F3p[i][j][k], 2, buffer.v[i][j][k]        );
+                
+                pSUM      (buffer.p[i][j][k], buffer.v[i][j][k], buffer.p[i][j][k]);
+                pSUM      (buffer.p[i][j][k], F1p[i][j][k]     , buffer.p[i][j][k]);
+                pSUM      (buffer.p[i][j][k], F4p[i][j][k]     , buffer.p[i][j][k]);
+                pMULTIPLY (buffer.p[i][j][k], 1.0 / 6          , buffer.p[i][j][k]);
+                pSUM      (buffer.p[i][j][k], jello->p[i][j][k], jello->p[i][j][k]);
+                
+                pMULTIPLY (F2v[i][j][k]     , 2                , buffer.p[i][j][k]);
+                pMULTIPLY (F3v[i][j][k]     , 2                , buffer.v[i][j][k]);
+                pSUM      (buffer.p[i][j][k], buffer.v[i][j][k], buffer.p[i][j][k]);
+                pSUM      (buffer.p[i][j][k], F1v[i][j][k]     , buffer.p[i][j][k]);
+                pSUM      (buffer.p[i][j][k], F4v[i][j][k]     , buffer.p[i][j][k]);
+                pMULTIPLY (buffer.p[i][j][k], 1.0 / 6          , buffer.p[i][j][k]);
+                pSUM      (buffer.p[i][j][k], jello->v[i][j][k], jello->v[i][j][k]);
+                
+                int n = i*SIZE*SIZE+j*SIZE+k;
+                s_next[n]->setVelocity(jello->v[i][j][k]);
+                s_next[n]->setPosition(jello->p[i][j][k]);
+                s_next[n]->setColor(s[n]->getColor());
+                s_next[n]->setMass(s[n]->getMass());
+
+            }
+    for (int n = 0; n <N; n++) {
+        w.checkCollision(*s[n], *s_next[n]);
+    }
+    s = s_next;
+    RK4time = RK4time + jello->h;
+    return;
+}
+
+void mouseMotionDrag(int x, int y)
+{
+    int vMouseDelta[2] = {x-g_vMousePos[0], y-g_vMousePos[1]};
+    if (g_iRightMouseButton) // handle camera rotations
+    {
+        Phi   += vMouseDelta[0] * 0.01;
+        Theta += vMouseDelta[1] * 0.01;
+        
+        if (Phi  > 2*pi)
+            Phi -= 2*pi;
+        
+        if (Phi < 0)
+            Phi += 2*pi;
+        
+        if (Theta > pi / 2 - 0.01)
+            Theta = pi / 2 - 0.01;
+        
+        if (Theta <-pi / 2 + 0.01)
+            Theta =-pi / 2 + 0.01;
+        
+        g_vMousePos[0] = x;
+        g_vMousePos[1] = y;
+    }
+}
+
+void mouseMotion (int x, int y)
+{
+    g_vMousePos[0] = x;
+    g_vMousePos[1] = y;
+}
+
+void mouseButton(int button, int state, int x, int y)
+{
+    switch (button)
+    {
+        case GLUT_LEFT_BUTTON:
+            g_iLeftMouseButton = (state==GLUT_DOWN);
+            break;
+            
+        case GLUT_MIDDLE_BUTTON:
+            g_iMiddleMouseButton = (state==GLUT_DOWN);
+            break;
+            
+        case GLUT_RIGHT_BUTTON:
+            g_iRightMouseButton = (state==GLUT_DOWN);
+            break;
+    }
+    
+    g_vMousePos[0] = x;
+    g_vMousePos[1] = y;
+}
+
+// gets called whenever a key is pressed
+void keyboardFunc (unsigned char key, int x, int y)
+{
+    switch (key)
+    {
+        case 27:
+            exit(0);
+            break;
+            
+        case 'e':
+            Theta = pi / 6;
+            Phi = pi / 6;
+            viewingMode = 0;
+            break;
+            
+        case 'v':
+            viewingMode = 1 - viewingMode;
+            break;
+            
+        case 'h':
+            shear = 1 - shear;
+            break;
+            
+        case 's':
+            structural = 1 - structural;
+            break;
+            
+        case 'b':
+            bend = 1 - bend;
+            break;
+            
+        case 'p':
+            doPause = 1 - doPause;
+            break;
+            
+        case 'z':
+            R -= 0.2;
+            if (R < 0.2)
+                R = 0.2;
+            break;
+            
+        case 'x':
+            R += 0.2;
+            break;
+            
+        case ' ':
+            saveScreenToFile = 1 - saveScreenToFile;
+            break;
+    }
+}
+void idle() {
+    double start;
+    clock_t start_time;
+    if (isEuler) {
+
+    start = ei.getTime();
+    start_time = clock();
+        applyForce();
+        for (int n = 0; n<N; n++) {
+            ei.update(*s[n], *s_next[n], w);
+        }
+    }else{
+        start = RK4time;
+        start_time = clock();
+
+        RK4(&jello);
+    }
+    
+    for(int i =0; i<SIZE; i++){
+        for(int j =0; j<SIZE; j++){
+            for(int k =0; k<SIZE; k++){
+                int n = i*SIZE*SIZE + j*SIZE + k;
+                pos[i][j][k] = s[n]->getPosition();
+                vel[i][j][k] = s[n]->getVelocity();
+            }
+        }
+    }
+    double tau;
+if (isEuler) {
+    tau = 1.0 / frames_per_second;
+    while ((ei.getTime()) - start < tau){
+        
+            applyForce();
+            for (int n = 0; n<N; n++) {
+                ei.update(*s[n], *s_next[n], w);
+                
+            }
+    }
+        }else{
+            tau = 1.0 / frames_per_second;
+            while ((RK4time) - start < tau){
+
+            RK4(&jello);
+            }
+        }
+    
+        for(int i =0; i<SIZE; i++){
+            for(int j =0; j<SIZE; j++){
+                for(int k =0; k<SIZE; k++){
+                    int n = i*SIZE*SIZE + j*SIZE + k;
+                    pos[i][j][k] = s[n]->getPosition();
+                    vel[i][j][k] = s[n]->getVelocity();
+                }
+            }
+        }
+    
+    while (((double)(clock()) - start_time) / CLOCKS_PER_SEC < tau)
+        ;
+    //        double start = rk.getTime();
+//        clock_t start_time = clock();
+//        applyForce();
+//        rk.update(s, s_next, w);
+//        for(int i =0; i<SIZE; i++)
+//            for(int j =0; j<SIZE; j++)
+//                for(int k =0; k<SIZE; k++){
+//                    int n = i*SIZE*SIZE + j*SIZE + k;
+//                    pos[i][j][k] = s[n]->getPosition();
+//                    vel[i][j][k] = s[n]->getVelocity();
+//                }
+//        applyForce();
+//        rk.update2(s, s_next, w);
+//        for(int i =0; i<SIZE; i++)
+//            for(int j =0; j<SIZE; j++)
+//                for(int k =0; k<SIZE; k++){
+//                    int n = i*SIZE*SIZE + j*SIZE + k;
+//                    pos[i][j][k] = s[n]->getPosition();
+//                    vel[i][j][k] = s[n]->getVelocity();
+//                }
+//        applyForce();
+//        rk.update3(s, s_next, w);
+//        for(int i =0; i<SIZE; i++)
+//            for(int j =0; j<SIZE; j++)
+//                for(int k =0; k<SIZE; k++){
+//                    int n = i*SIZE*SIZE + j*SIZE + k;
+//                    pos[i][j][k] = s[n]->getPosition();
+//                    vel[i][j][k] = s[n]->getVelocity();
+//                }
+//        applyForce();
+//        rk.update4(s, s_next, w);
+//        for(int i =0; i<SIZE; i++)
+//            for(int j =0; j<SIZE; j++)
+//                for(int k =0; k<SIZE; k++){
+//                    int n = i*SIZE*SIZE + j*SIZE + k;
+//                    pos[i][j][k] = s[n]->getPosition();
+//                    vel[i][j][k] = s[n]->getVelocity();
+//                }
+//        
+//        
+//        double tau = 1.0 / frames_per_second;
+//        while ((rk.getTime()) - start < tau){
+//            applyForce();
+//            rk.update(s, s_next, w);
+//            for(int i =0; i<SIZE; i++)
+//                for(int j =0; j<SIZE; j++)
+//                    for(int k =0; k<SIZE; k++){
+//                        int n = i*SIZE*SIZE + j*SIZE + k;
+//                        pos[i][j][k] = s[n]->getPosition();
+//                        vel[i][j][k] = s[n]->getVelocity();
+//                    }
+//            applyForce();
+//            rk.update2(s, s_next, w);
+//            for(int i =0; i<SIZE; i++)
+//                for(int j =0; j<SIZE; j++)
+//                    for(int k =0; k<SIZE; k++){
+//                        int n = i*SIZE*SIZE + j*SIZE + k;
+//                        pos[i][j][k] = s[n]->getPosition();
+//                        vel[i][j][k] = s[n]->getVelocity();
+//                    }
+//            applyForce();
+//            rk.update3(s, s_next, w);
+//            for(int i =0; i<SIZE; i++)
+//                for(int j =0; j<SIZE; j++)
+//                    for(int k =0; k<SIZE; k++){
+//                        int n = i*SIZE*SIZE + j*SIZE + k;
+//                        pos[i][j][k] = s[n]->getPosition();
+//                        vel[i][j][k] = s[n]->getVelocity();
+//                    }
+//            applyForce();
+//            rk.update4(s, s_next, w);
+//            for(int i =0; i<SIZE; i++)
+//                for(int j =0; j<SIZE; j++)
+//                    for(int k =0; k<SIZE; k++){
+//                        int n = i*SIZE*SIZE + j*SIZE + k;
+//                        pos[i][j][k] = s[n]->getPosition();
+//                        vel[i][j][k] = s[n]->getVelocity();
+//                    }
+//        }
+//        while (((double)(clock()) - start_time) / CLOCKS_PER_SEC < tau)
+//            ;
+//
+    
+    glutPostRedisplay();
+    
+}
+int pointMap(int side, int i, int j)
+{
+    int r;
+    
+    switch (side)
+    {
+        case 1: //[i][j][0] bottom face
+            r = 64 * i + 8 * j;
+            break;
+        case 6: //[i][j][7] top face
+            r = 64 * i + 8 * j + 7;
+            break;
+        case 2: //[i][0][j] front face
+            r = 64 * i + j;
+            break;
+        case 5: //[i][7][j] back face
+            r = 64 * i + 56 + j;
+            break;
+        case 3: //[0][i][j] left face
+            r = 8 * i + j;
+            break;
+        case 4: //[7][i][j] right face
+            r = 448 + 8 * i + j;
+            break;
+    }
+    return r;
+}
+
+void showCube()
+{
+    int    i,  j,  k,
+    ip, jp, kp;
+    int n, n1;
+    
+    point r1, r2, r3; // aux variables
+    
+    /* normals buffer and counter for Gourad shading*/
+    struct point normal[8][8];
+    int         counter[8][8];
+    
+    int    face;
+    double faceFactor, length;
+    
+    
+    
+#define NODE(face,i,j) (*((Point3D * )(pos) + pointMap((face),(i),(j))))
+    
+#define PROCESS_NEIGHBOUR(di,dj,dk) \
+    ip=i+(di);                        \
+    jp=j+(dj);                        \
+    kp=k+(dk);                        \
+    if                                \
+        (!  ((ip >7)|| (ip<0) || (jp>7) || (jp<0) || ( kp>7) || (kp<0)  )                  \
+         &&  (( i==0)|| (i==7) || (j==0) || (j==7) || ( k==0) || (k==7)  )                  \
+         &&  ((ip==0)|| (ip==7)|| (jp==0)|| (jp==7)|| (kp==0) || (kp==7) )                  \
+         )                                                                                  \
+    {                                                                                  \
+        n = i*SIZE*SIZE+j*SIZE+k;\
+        n1 = ip*SIZE*SIZE+jp*SIZE+kp;\
+        glVertex3f(s[n]->getPosition().x, s[n]->getPosition().y, s[n]->getPosition().z);         \
+        glVertex3f(s[n1]->getPosition().x, s[n1]->getPosition().y, s[n1]->getPosition().z);\
+    }                                                                                  \
+    
+    if (viewingMode==0) // render wireframe
+    {
+        glLineWidth(1);
+        glPointSize(5);
+        glDisable(GL_LIGHTING);
+        for (i=0; i<=7; i++)
+            for (j=0; j<=7; j++)
+                for (k=0; k<=7; k++)
+                {
+                    if (i*j*k*(7-i)*(7-j)*(7-k) != 0) // not surface point
+                        continue;
+                    
+                    glBegin    (GL_POINTS ); // draw point
+                    glColor4f  (1, 1, 1, 0);
+                    int n = i*SIZE*SIZE+j*SIZE+k;
+                    glVertex3f (s[n]->getPosition().x, s[n]->getPosition().y, s[n]->getPosition().z);
+                    glEnd      ();
+                    
+                    glBegin(GL_LINES);
+                    // structural springs
+                    if (structural == 1)
+                    {
+                        glColor4f(0,0,1,1);
+                        PROCESS_NEIGHBOUR( 1, 0, 0);
+                        PROCESS_NEIGHBOUR( 0, 1, 0);
+                        PROCESS_NEIGHBOUR( 0, 0, 1);
+                        PROCESS_NEIGHBOUR(-1, 0, 0);
+                        PROCESS_NEIGHBOUR( 0,-1, 0);
+                        PROCESS_NEIGHBOUR( 0, 0,-1);
+                    }
+                    // shear springs
+                    if (shear == 1)
+                    {
+                        glColor4f(0,1,0,1);
+                        PROCESS_NEIGHBOUR( 1, 1, 0);
+                        PROCESS_NEIGHBOUR(-1, 1, 0);
+                        PROCESS_NEIGHBOUR(-1,-1, 0);
+                        PROCESS_NEIGHBOUR( 1,-1, 0);
+                        PROCESS_NEIGHBOUR( 0, 1, 1);
+                        PROCESS_NEIGHBOUR( 0,-1, 1);
+                        PROCESS_NEIGHBOUR( 0,-1,-1);
+                        PROCESS_NEIGHBOUR( 0, 1,-1);
+                        PROCESS_NEIGHBOUR( 1, 0, 1);
+                        PROCESS_NEIGHBOUR(-1, 0, 1);
+                        PROCESS_NEIGHBOUR(-1, 0,-1);
+                        PROCESS_NEIGHBOUR( 1, 0,-1);
+                        
+                        PROCESS_NEIGHBOUR( 1, 1, 1);
+                        PROCESS_NEIGHBOUR(-1, 1, 1);
+                        PROCESS_NEIGHBOUR(-1,-1, 1);
+                        PROCESS_NEIGHBOUR( 1,-1, 1);
+                        PROCESS_NEIGHBOUR( 1, 1,-1);
+                        PROCESS_NEIGHBOUR(-1, 1,-1);
+                        PROCESS_NEIGHBOUR(-1,-1,-1);
+                        PROCESS_NEIGHBOUR( 1,-1,-1);
+                    }
+                    
+                    // bend
+                    if (bend == 1)
+                    {
+                        glColor4f(1,0,0,1);
+                        PROCESS_NEIGHBOUR(2 , 0, 0);
+                        PROCESS_NEIGHBOUR(0 , 2, 0);
+                        PROCESS_NEIGHBOUR(0 , 0, 2);
+                        PROCESS_NEIGHBOUR(-2, 0, 0);
+                        PROCESS_NEIGHBOUR(0 ,-2, 0);
+                        PROCESS_NEIGHBOUR(0 , 0,-2);
+                    }
+                    glEnd();
+                }
+        glEnable(GL_LIGHTING);
+    }
+    
+    else
+    {
+        glPolygonMode(GL_FRONT, GL_FILL);
+        
+        for (face=1; face <= 6; face++)
+            // face == face of a cube
+            //  1 = bottom, 2 = front ,
+            //  3 = left  , 4 = right ,
+            //  5 = far   , 6 = top
+        {
+            if((face==1) || (face==3) || (face==5))
+                faceFactor =-1;    // flip orientation
+            else
+                faceFactor = 1;
+            
+            for (i=0; i <= 7; i++) // reset buffers
+                for (j=0; j <= 7; j++)
+                {
+                    normal[i][j].x=0;
+                    normal[i][j].y=0;
+                    normal[i][j].z=0;
+                    counter[i][j] =0;
+                }
+            
+            // process triangles, accumulate normals for Gourad shading
+            for (i=0; i <= 6; i++)
+                for(j=0; j <= 6; j++) // process block (i,j)
+                {
+                    pDIFFERENCE(NODE(face,i+1,j),NODE(face,i,j),r1)     ; // first triangle
+                    pDIFFERENCE(NODE(face,i,j+1),NODE(face,i,j),r2)     ;
+                    CROSSPRODUCTp(r1,r2,r3) ;
+                    pMULTIPLY(r3,faceFactor,r3);
+                    pNORMALIZE(r3);
+                    pSUM(normal[i+1][j],r3,normal[i+1][j]);
+                    counter[i+1][j]++;
+                    pSUM(normal[i][j+1],r3,normal[i][j+1]);
+                    counter[i][j+1]++;
+                    pSUM(normal[i][j],r3,normal[i][j]);
+                    counter[i][j]++;
+                    
+                    pDIFFERENCE(NODE(face,i,j+1),NODE(face,i+1,j+1),r1); // second triangle
+                    pDIFFERENCE(NODE(face,i+1,j),NODE(face,i+1,j+1),r2);
+                    CROSSPRODUCTp(r1,r2,r3); pMULTIPLY(r3,faceFactor,r3);
+                    pNORMALIZE(r3);
+                    pSUM(normal[i+1][j],r3,normal[i+1][j]);
+                    counter[i+1][j]++;
+                    pSUM(normal[i][j+1],r3,normal[i][j+1]);
+                    counter[i][j+1]++;
+                    pSUM(normal[i+1][j+1],r3,normal[i+1][j+1]);
+                    counter[i+1][j+1]++;
+                }
+            
+            /* the actual rendering */
+            for(j=1; j<=7; j++) 
+            {
+                if (faceFactor > 0)
+                    glFrontFace(GL_CCW); // the usual definition of front face
+                else
+                    glFrontFace(GL_CW); // flip definition of orientation
+                
+                glBegin(GL_TRIANGLE_STRIP);
+                for(i=0; i<=7; i++)
+                {
+                    glNormal3f(normal[i][j].x / counter[i][j],normal[i][j].y / counter[i][j],
+                               normal[i][j].z / counter[i][j]);
+                    glVertex3f(NODE(face,i,j).x, NODE(face,i,j).y, NODE(face,i,j).z);
+                    glNormal3f(normal[i][j-1].x / counter[i][j-1],normal[i][j-1].y/ counter[i][j-1],
+                               normal[i][j-1].z / counter[i][j-1]);
+                    glVertex3f(NODE(face,i,j-1).x, NODE(face,i,j-1).y, NODE(face,i,j-1).z);
+                }
+                glEnd();
+            }
+        } 
+    } // end for loop over faces
+    glFrontFace(GL_CCW);
+}
+
+void display()
+{
+    glClear       (GL_COLOR_BUFFER_BIT |
+                   GL_DEPTH_BUFFER_BIT );
+    glMatrixMode  (GL_MODELVIEW        );
+    
+    glLoadIdentity();
+    
+    // camera parameters - Phi, Theta, R
+    gluLookAt(R * cos(Phi) * cos (Theta),
+              R * sin(Phi) * cos (Theta),
+              R * sin (Theta),
+              0.0,0.0,0.0, 0.0,0.0,1.0 );
+    
+    //gluLookAt(-3, 3,  1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+    // global ambient light
+    GLfloat aGa[] = { 0.0, 0.0, 0.0, 0.0 };
+    
+    // light 's ambient, diffuse, specular components
+    GLfloat lKa0[] = { 0.0, 0.0, 0.0, 1.0 };
+    GLfloat lKd0[] = { 1.0, 1.0, 1.0, 1.0 };
+    GLfloat lKs0[] = { 1.0, 1.0, 1.0, 1.0 };
+    
+    GLfloat lKa1[] = { 0.0, 0.0, 0.0, 1.0 };
+    GLfloat lKd1[] = { 1.0, 0.0, 0.0, 1.0 };
+    GLfloat lKs1[] = { 1.0, 0.0, 0.0, 1.0 };
+    
+    GLfloat lKa2[] = { 0.0, 0.0, 0.0, 1.0 };
+    GLfloat lKd2[] = { 1.0, 1.0, 0.0, 1.0 };
+    GLfloat lKs2[] = { 1.0, 1.0, 0.0, 1.0 };
+    
+    GLfloat lKa3[] = { 0.0, 0.0, 0.0, 1.0 };
+    GLfloat lKd3[] = { 0.0, 1.0, 1.0, 1.0 };
+    GLfloat lKs3[] = { 0.0, 1.0, 1.0, 1.0 };
+    
+    GLfloat lKa4[] = { 0.0, 0.0, 0.0, 1.0 };
+    GLfloat lKd4[] = { 0.0, 0.0, 1.0, 1.0 };
+    GLfloat lKs4[] = { 0.0, 0.0, 1.0, 1.0 };
+    
+    GLfloat lKa5[] = { 0.0, 0.0, 0.0, 1.0 };
+    GLfloat lKd5[] = { 1.0, 0.0, 1.0, 1.0 };
+    GLfloat lKs5[] = { 1.0, 0.0, 1.0, 1.0 };
+    
+    GLfloat lKa6[] = { 0.0, 0.0, 0.0, 1.0 };
+    GLfloat lKd6[] = { 1.0, 1.0, 1.0, 1.0 };
+    GLfloat lKs6[] = { 1.0, 1.0, 1.0, 1.0 };
+    
+    GLfloat lKa7[] = { 0.0, 0.0, 0.0, 1.0 };
+    GLfloat lKd7[] = { 0.0, 1.0, 1.0, 1.0 };
+    GLfloat lKs7[] = { 0.0, 1.0, 1.0, 1.0 };
+    
+    // light positions and directions
+    GLfloat lP0[] = { -1.999, -1.999, -1.999, 1.0 };
+    GLfloat lP1[] = {  1.999, -1.999, -1.999, 1.0 };
+    GLfloat lP2[] = {  1.999,  1.999, -1.999, 1.0 };
+    GLfloat lP3[] = { -1.999,  1.999, -1.999, 1.0 };
+    GLfloat lP4[] = { -1.999, -1.999,  1.999, 1.0 };
+    GLfloat lP5[] = {  1.999, -1.999,  1.999, 1.0 };
+    GLfloat lP6[] = {  1.999,  1.999,  1.999, 1.0 };
+    GLfloat lP7[] = { -1.999,  1.999,  1.999, 1.0 };
+    
+    // jelly material color
+    GLfloat mKa[] = { 0, 0.2, 0.4, 1.0 };
+    GLfloat mKd[] = { 0, 0.0, 0.4, 1.0 };
+    GLfloat mKs[] = { 0, 0.0, 0.4, 1.0 };
+    GLfloat mKe[] = { 0, 0.0, 0.4, 1.0 };
+    
+    /* set up lighting */
+    glLightModelfv (GL_LIGHT_MODEL_AMBIENT     , aGa     );
+    glLightModelf  (GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE );
+    glLightModelf  (GL_LIGHT_MODEL_TWO_SIDE    , GL_FALSE);
+    
+    // set up cube color
+    glMaterialfv (GL_FRONT, GL_AMBIENT  , mKa);
+    glMaterialfv (GL_FRONT, GL_DIFFUSE  , mKd);
+    glMaterialfv (GL_FRONT, GL_SPECULAR , mKs);
+    glMaterialfv (GL_FRONT, GL_EMISSION , mKe);
+    glMaterialf  (GL_FRONT, GL_SHININESS, 10 );
+    
+    // macro to set up light i
+#define LIGHTSETUP(i)\
+    glLightfv(GL_LIGHT##i, GL_POSITION, lP##i);\
+    glLightfv(GL_LIGHT##i, GL_AMBIENT, lKa##i);\
+    glLightfv(GL_LIGHT##i, GL_DIFFUSE, lKd##i);\
+    glLightfv(GL_LIGHT##i, GL_SPECULAR, lKs##i);\
+    glEnable(GL_LIGHT##i)
+    
+    LIGHTSETUP (0);
+    LIGHTSETUP (1);
+    LIGHTSETUP (2);
+    LIGHTSETUP (3);
+    LIGHTSETUP (4);
+    LIGHTSETUP (5);
+    LIGHTSETUP (6);
+    LIGHTSETUP (7);
+    
+    // enable lighting
+    glEnable(GL_LIGHTING   );
+    glEnable(GL_DEPTH_TEST);
+    
     glPushMatrix();
     glScaled((size)*2, (size)*2, (size)*2);
-    //glRotatef(5.0, 0.0, 1.0, 0.0);
-    
-//    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, black);
-//    glMaterialfv(GL_FRONT, GL_SPECULAR, white);
-//    glMaterialf(GL_FRONT, GL_SHININESS, 100);
-//    glDepthMask(GL_TRUE);
     glColor3f(1.0, 1.0, 0);
     glutWireCube(1.0);
     glPopMatrix();
     
-//    glPushMatrix();
-//    glColor3f(0.9, 0.5 ,0.5 );
-//    
-//    glTranslatef(0.0f,1.5f,0.0f);
-//    glRotated(90, 1, 0, 0);
-//    gluCylinder(quadratic,1.0f,0.0f,2.0f,3,3);
-//    glPopMatrix();
-    
-    glPushMatrix();
-    // Yellow side - BACK
-//    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, white);
-//    glMaterialfv(GL_FRONT, GL_SPECULAR, white);
-//    glMaterialf(GL_FRONT, GL_SHININESS, 80);
-//
-    glColor3f(0.9, 0.5 ,0.5 );
-    glBegin(GL_POLYGON);
-    glVertex3f(  vertices[0][0],vertices[0][1],vertices[0][2] );
-    glVertex3f(  vertices[1][0],vertices[1][1],vertices[1][2] );
-    glVertex3f(  vertices[2][0],vertices[2][1],vertices[2][2] );
-    glEnd();
-    
-    
-    
-    glPopMatrix();
-    
-}
-void initPlaneNormal()
-{
-    
-    float v1[3], v2[3];
-    float *polygenNormal;
-    float normalValue = 0;
-    for (int i=0; i<3; i++) {
-        v1[i] = vertices[1][i] - vertices[0][i];
-        v2[i] = vertices[2][i] - vertices[1][i];
-    }
-    
-    polygenNormal = crossProduct(v1, v2);
-    normalValue =
-    sqrt(powf(polygenNormal[0], 2) +powf(polygenNormal[1], 2) +powf(polygenNormal[2], 2));
-    
-    p_polygen.normal[0] = polygenNormal[0]/normalValue;
-    p_polygen.normal[1] = polygenNormal[1]/normalValue;
-    p_polygen.normal[2] = polygenNormal[2]/normalValue;
-    
-    p_polygen.point[0] = vertices[1][0];
-    p_polygen.point[1] = vertices[1][1];
-    p_polygen.point[2] = vertices[1][2];
-    printf("polygen point %f %f %f\n",p_polygen.point[0],p_polygen.point[1],p_polygen.point[2]);
-
-    //back plane
-    p_back.normal[0] = 0;
-    p_back.normal[1] = 0;
-    p_back.normal[2] = 1;
-    
-    p_back.point[0] = 0;
-    p_back.point[1] = 0;
-    p_back.point[2] = -2;
-    //front plane
-    p_front.normal[0] = 0;
-    p_front.normal[1] = 0;
-    p_front.normal[2] = -1;
-    
-    p_front.point[0] = 0;
-    p_front.point[1] = 0;
-    p_front.point[2] = 2;
-    
-    //left plane
-    p_left.normal[0] = 1;
-    p_left.normal[1] = 0;
-    p_left.normal[2] = 0;
-    
-    p_left.point[0] = -2;
-    p_left.point[1] = 0;
-    p_left.point[2] = 0;
-    
-    
-    //right plane
-    p_right.normal[0] = -1;
-    p_right.normal[1] = 0;
-    p_right.normal[2] = 0;
-    
-    p_right.point[0] = 2;
-    p_right.point[1] = 0;
-    p_right.point[2] = 0;
-    
-    //bottom plane
-    p_bot.normal[0] = 0;
-    p_bot.normal[1] = 1;
-    p_bot.normal[2] = 0;
-    
-    p_bot.point[0] = 0;
-    p_bot.point[1] = -2;
-    p_bot.point[2] = 0;
-    
-    //top plane
-    p_top.normal[0] = 0;
-    p_top.normal[1] = -1;
-    p_top.normal[2] = 0;
-    
-    p_top.point[0] = 0;
-    p_top.point[1] = 2;
-    p_top.point[2] = 0;
-
-}
-
-void initialization(int n)
-{
-    
-    
-    s_current.position[n][0] = 1.9;
-    s_current.position[n][1] = 1.9;
-    s_current.position[n][2] = -2;
-
-    
-    s_current.velocity[n][0] = v_max * gaussrand();
-    s_current.velocity[n][1] = v_max * gaussrand();
-    s_current.velocity[n][2] = v_max * gaussrand();
-    
-    s_current.color[n][0] = c_max * ((double)rand() / (double)RAND_MAX *2 - 1)+0.5;
-    s_current.color[n][1] = c_max ;
-    s_current.color[n][2] = c_max * ((double)rand() / (double)RAND_MAX *2 - 1)+0.5;
-    
-//    printf(" y %f",s_current.position[n][1] );
-//    printf(" z %f",s_current.position[n][2] );
-//    printf(" vx %f",s_current.velocity[10][0] );
-//    printf(" vy %f",s_current.velocity[10][1] );
-//    printf(" vz %f",s_current.velocity[10][2] );
-    
-}
-
-float PlaneCollision(int n, Plane p)
-{
-    //printf("plan collision function!");
-    float s_vector_current[3] = {0,0,0};
-    float s_vector_next[3]={0,0,0};
-    double DotProduct_current = 0 ;
-    double DotProduct_next = 0;
-    
-    for (int i=0; i<3; i++) {
-        s_vector_current[i] = s_current.position[n][i] - p.point[i];
-        s_vector_next[i] = s_next.position[n][i] - p.point[i];
-        DotProduct_current += s_vector_current[i] * p.normal[i];
-        DotProduct_next += s_vector_next[i] * p.normal[i];
-        //printf("vector next in plane collision %f \n",s_next.position[n][i]);
-
-    }
-    //printf("dotproduct in plane collision %f \n",DotProduct_next);
-
-    // Determine if it didnt collide
-    float d = 0;
-    if (( DotProduct_current >= 0 && DotProduct_next >= 0) || (DotProduct_current <= 0 && DotProduct_next <= 0))
-        d = 0;
-    else
-        d = fabsf(DotProduct_next);
-    // distance of xi+1 to the plane
-    
-    //printf("distance in plane collision %f \n",d);
-    return d;
-    
-}
-
-float CollisionDetection(int n)
-{
-    
-    //printf("collision detect function!");
-
-    float d = 0;
-    if (PlaneCollision(n,p_polygen) != 0) {
-        planeIndicator = 0;
-        d = PlaneCollision(n,p_polygen);
-        return d;
-    }
-
-    if (PlaneCollision(n,p_front) != 0) {
-        planeIndicator = 1;
-        d = PlaneCollision(n,p_front);
-        return d;
-    }
-    if (PlaneCollision(n,p_back) != 0) {
-        planeIndicator = 2;
-        d = PlaneCollision(n, p_back);
-        return d;
-    }
-    if (PlaneCollision(n,p_right) != 0) {
-        planeIndicator = 3;
-        d = PlaneCollision(n,p_right);
-        return d;
-    }
-    if (PlaneCollision(n,p_left) != 0) {
-        planeIndicator = 4;
-        d = PlaneCollision(n,p_left);
-        return d;
-    }
-    if (PlaneCollision(n,p_bot) != 0) {
-        planeIndicator = 5;
-        d = PlaneCollision(n,p_bot);
-        return d;
-    }
-    if (PlaneCollision(n,p_top) != 0) {
-        planeIndicator = 6;
-        d = PlaneCollision(n,p_top);
-        return d;
-    }
-    
-    return 0;
-    
-}
-
-float ** CollisionResponse (float d, float p[],float v[])
-{
-    //printf("collision response function! %f,%f,%f\n",v[0],v[1],v[2]);
-    //printf("RESPONSE distance %f\n",d);
-    float vn[3];
-    static float v_next[3],p_next[3];
-    float vn_value = 0;
-    
-    //initialize array
-    float **next = 0;
-    next = new float*[2];
-    for (int h = 0; h < 2; h++) {
-        next[h] = new float[3];
-    }
-    
-    for (int i = 0; i < 3; i++) {
-        switch (planeIndicator) {
-            case 0:
-            {
-                float pc[3], p0c[3], p1c[3], p2c[3];
-                float a0[3], a1[3], a2[3];
-                float sign_a0 = 0, sign_a1 = 0, sign_a2 = 0;
-                
-                    pc[i] = p[i] + d*p_polygen.normal[i];
-                    p0c[i] = vertices[0][i] - pc[i];
-                    p1c[i] = vertices[1][i] - pc[i];
-                    p2c[i] = vertices[2][i] - pc[i];
-
-                
-                //printf("pc %f %f %f",pc[0],pc[1],pc[2]);
-                a0[0] = p1c[1]*p2c[2] - p1c[2]*p2c[1];
-                a0[1] = -p1c[0]*p2c[2] + p1c[2]*p2c[0];
-                a0[2] = p1c[0]*p2c[1] - p1c[1]*p2c[0];
-                
-                a1[0] = p2c[1]*p0c[2] - p2c[2]*p0c[1];
-                a1[1] = -p2c[0]*p0c[2] + p2c[2]*p0c[0];
-                a1[2] = p2c[0]*p0c[1] - p2c[1]*p0c[0];
-                
-                a2[0] = p0c[1]*p1c[2] - p0c[2]*p1c[1];
-                a2[1] = -p0c[0]*p1c[2] + p0c[2]*p1c[0];
-                a2[2] = p0c[0]*p1c[1] - p0c[1]*p1c[0];
-//                a0 = crossProduct(p1c, p2c);
-//                a1 = crossProduct(p2c, p0c);
-//                a2 = crossProduct(p0c, p1c);
-                
-                
-                    sign_a0 += a0[i] * p_polygen.normal[i];
-                    sign_a1 += a1[i] * p_polygen.normal[i];
-                    sign_a2 += a2[i] * p_polygen.normal[i];
-
-                
-                //printf("sign %f %f %f\n",sign_a0, sign_a1, sign_a2);
-                if ((sign_a0 >= 0 && sign_a1 >= 0 && sign_a2 >= 0)||(sign_a0 <= 0 && sign_a1 <= 0 && sign_a2 <= 0)) {
-                    p_next[i] = p[i] + (1+e)*d*p_polygen.normal[i];
-                    vn_value += v[i] * p_polygen.normal[i];
-                    vn[i] = fabsf(vn_value) * p_polygen.normal[i];
-                    v_next[i] = (1+e) * vn[i] + v[i];
-                }else{
-                    //printf("OUTSIDE POLYGEN ");
-                    p_next[i] = p[i];
-                    v_next[i] = v[i];
-                }
-                break;
-                
-            }
-            case 1:
-                p_next[i] = p[i] + (1+e)*d*p_front.normal[i];
-                vn_value += v[i] * p_front.normal[i];
-                vn[i] = fabsf(vn_value) * p_front.normal[i];
-                v_next[i] = (1+e) * vn[i] + v[i];
-
-                break;
-            case 2:
-                p_next[i] = p[i] + (1+e)*d*p_back.normal[i];
-                vn_value += v[i] * p_back.normal[i];
-                vn[i] = fabsf(vn_value) * p_back.normal[i];
-                v_next[i] = (1+e) * vn[i] + v[i];
-
-                break;
-            case 3:
-                p_next[i] = p[i] + (1+e)*d*p_right.normal[i];
-                vn_value += v[i] * p_right.normal[i];
-                vn[i] = fabsf(vn_value) * p_right.normal[i];
-                v_next[i] = (1+e) * vn[i] + v[i];
-
-                break;
-            case 4:
-                p_next[i] = p[i] + (1+e)*d*p_left.normal[i];
-                vn_value += v[i] * p_left.normal[i];
-                vn[i] = fabsf(vn_value) * p_left.normal[i];
-                v_next[i] = (1+e) * vn[i] + v[i];
-
-                break;
-            case 5:
-                p_next[i] = p[i] + (1+e)*d*p_bot.normal[i];
-                vn_value += v[i] * p_bot.normal[i];
-                vn[i] = fabsf(vn_value) * p_bot.normal[i];
-                v_next[i] = (1+e) * vn[i] + v[i];
-
-                break;
-            case 6:
-                p_next[i] = p[i] + (1+e)*d*p_top.normal[i];
-                vn_value += v[i] * p_top.normal[i];
-                vn[i] = fabsf(vn_value) * p_top.normal[i];
-                v_next[i] = (1+e) * vn[i] + v[i];
-
-                break;
-            default:
-                break;
-        }
-        
-        next[0][i] = p_next[i];
-        next[1][i] = v_next[i];
-
-    }
-    
-    return next;
-}
-
-float * computeAcceleration(int n)
-{
-    Force gravity;
-    Force airResist;
-    Force wind;
-    static float acceleration[3] = { 0, 0, 0 };
-    
-    gravity.value[0] = 0;
-    gravity.value[1] = - mass * g;
-    gravity.value[2] = 0;
-    wind.value[0] = 0.1;
-    wind.value[1] = 0;
-    wind.value[2] = 0.1;
-    
-    for (int i = 0; i < 3; i++) {
-        airResist.value[i] = - ad * s_current.velocity[n][i];
-        acceleration[i] = (gravity.value[i]+airResist.value[i]+wind.value[i]) / mass;
-    }
-    return acceleration;
-    
-    
-}
-
-int restingContact( float position[], float velocity[], float accel[])
-{
-    
-    float vx = velocity[0];
-    float vy = velocity[1];
-    float vz = velocity[2];
-    
-    float v = sqrtf(vx*vx + vy*vy + vz*vz);
-    //front
-    if ((abs (position[2] - size)) < tolerance) {
-        GLboolean noVelocity = GL_TRUE;
-        if (v > vtolerance)
-            noVelocity = GL_FALSE;
-        if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += accel[i] *p_front.normal[i];
-            if (DotProduct < 0) {
-                return 1;
-            }
-        }
-    }
-    //back
-    if ((abs (- position[2] - size)) < tolerance) {
-        GLboolean noVelocity = GL_TRUE;
-        if (v > vtolerance)
-            noVelocity = GL_FALSE;
-        if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += accel[i] *p_back.normal[i];
-            if (DotProduct < 0) {
-                return 1;
-            }
-        }
-    }
-    //right
-    if ((abs (position[0] - size)) < tolerance) {
-        GLboolean noVelocity = GL_TRUE;
-        
-        if (v > vtolerance)
-            noVelocity = GL_FALSE;
-        if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += accel[i] *p_right.normal[i];
-            if (DotProduct < 0) {
-                return 1;
-            }
-        }
-    }
-    //left
-    if ((abs (-position[0] - size)) < tolerance) {
-        GLboolean noVelocity = GL_TRUE;
-        
-        if (v > vtolerance)
-            noVelocity = GL_FALSE;
-        if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += accel[i] *p_left.normal[i];
-            if (DotProduct < 0) {
-                return 1;
-            }
-        }
-    }
-    //bot
-    if ((abs (- position[1] - size)) < tolerance) {
-        //printf("checking bottom plane");
-        GLboolean noVelocity = GL_TRUE;
-        
-        if (v > vtolerance)
-            noVelocity = GL_FALSE;
-        if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += accel[i] *p_bot.normal[i];
-            if (DotProduct < 0) {
-                return 1;
-            }
-        }
-    }
-    //top
-    if ((abs (position[1] - size)) < tolerance) {
-        GLboolean noVelocity = GL_TRUE;
-        
-        if (v > vtolerance)
-            noVelocity = GL_FALSE;
-        if (noVelocity == GL_TRUE) {
-            float DotProduct = 0;
-            for (int i = 0; i < 3 ; i++)
-                DotProduct += accel[i] *p_top.normal[i];
-            if (DotProduct < 0) {
-                return 1;
-            }
-        }
-    }
-    return 0;
-}
-
-void update()
-{
-    float *accel;
-    float **next;
-    
-    for (int n=0; n<N; n++) {
-        
-        //compute acceleration
-        accel = computeAcceleration(n);
-        for (int i=0; i<3; i++) {
-            acceleration[n][i] = accel[i];
-        }
-        //integrate to get new state
-        for (int i=0; i<3; i++) {
-            s_next.velocity[n][i] = s_current.velocity[n][i] + acceleration[n][i] * h;
-            s_next.position[n][i] = s_current.position[n][i] + s_current.velocity[n][i] * h;
-            s_next.color[n][i] = s_current.color[n][i]+h/10;
-        }
-        //printf("next position for %d is %f", n, s_next.position[n][0]);
-        
-        //check for collision
-        float d = CollisionDetection(n); //distance
-        
-        if (d != 0) {
-            //compute new velocity and position
-            next = CollisionResponse( d, s_next.position[n], s_next.velocity[n] );
-            for (int i=0; i<3; i++) {
-                s_next.velocity[n][i] = next[1][i];
-                s_next.position[n][i] = next[0][i];
-            }
-
-        }
-        
-    }
-    
-    //update state
-    s_current = s_next;
-    timestep += h;
-    for (int n=0; n<N; n++) {
-        for (int i=0; i<3; i++) {
-                tranPos[n][i] = s_current.position[n][i];
-        }
-        
-        int outOfBox = 0;
-        for (int i=0; i<3; i++) {
-            if (fabsf(s_current.position[n][i]) > (2) )
-                outOfBox = 1;
-        }
-        int stopped = restingContact(s_current.position[n],s_current.velocity[n],acceleration[n]);
-        if (stopped == 1 || outOfBox == 1) {
-            initialization(n);
-        }
-//        if (outOfBox == 1) {
-//            initialization(n);
-//        }
-    
-        
-    }
-//    printf("-----------------------------\n");
-//    printf(" tx %f",tranPos[10][0] );
-//    printf(" ty %f",tranPos[10][1] );
-//    printf(" tz %f",tranPos[10][2] );
-
-}
-
-void idle() {
-    double start = timestep;
-    clock_t start_time = clock();
-    update();
-    
-    double tau = 1.0 / frames_per_second;
-    while (timestep - start < tau)
-        update();
-    while (((double)(clock()) - start_time) / CLOCKS_PER_SEC < tau)
-        ;
-    glutPostRedisplay();
-    
-}
-
-
-void display()
-{
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);//clear buffer
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
- 	gluLookAt(posx, posy, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);//isometric view
-    
-    // BOX
-    //glPushMatrix();
-    //glDepthMask(GL_FALSE);
-    box();
-    //glPopMatrix();
-    
-    // particles
-    // Add particles to the scene.
-    glPointSize(3);
-    glBegin(GL_POINTS);
-    for (int n=0; n<N; n++) {
-        glColor3f(s_current.color[n][0],s_current.color[n][1],s_current.color[n][2]);
-        glVertex3f(tranPos[n][0], tranPos[n][1], tranPos[n][2]);
-        //printf("POSITION OF %d is %f/%f/%f",n,tranPos[n][0], tranPos[n][1], tranPos[n][2]);
-    }
-    glEnd();
-
-
+    showCube();
     
 	glutSwapBuffers();
 }
@@ -726,68 +1382,52 @@ void keyboard(int key, int xx, int yy) {
 }
 
 void init() {
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glClearColor(0.7, 0.7, 0.7, 1.0);
-    quadratic = gluNewQuadric();
+    glMatrixMode   (GL_PROJECTION);
+    glLoadIdentity ();
+    gluPerspective (90.0,1.0,0.01,1000.0);
     
-//    glLightfv(GL_LIGHT0, GL_AMBIENT, black);
-//    glLightfv(GL_LIGHT0, GL_DIFFUSE, white);
-//    glLightfv(GL_LIGHT0, GL_SPECULAR, white);
-//    glLightfv(GL_LIGHT0, GL_POSITION, direction);
-//    glEnable(GL_NORMALIZE);
-//    
-//    glMatrixMode(GL_MODELVIEW);
-//    glLoadIdentity();
-//    
-//    glEnable(GL_LIGHTING);                // so the renderer considers light
-//    glEnable(GL_LIGHT0);                  // turn LIGHT0 on
-    glEnable(GL_DEPTH_TEST);              // so the renderer considers depth
+    // set background color to grey
+    glClearColor   (0.7, 0.7, 0.7, 0.0);
     
-    //set initial state
-    srand ((unsigned int)time(0));
-
-    for (int n=0; n<N; n++) {
-        initialization(n);
-    }
+    glCullFace     (GL_BACK);
+    glEnable       (GL_CULL_FACE);
     
-    //initialize polygen
-//    for (int i=0; i<3; i++) {
-//        for (int j=0; j<3; j++) {
-//            vertices[i][j] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1);
-//        }
-//    }
-    vertices[0][0] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1)-1.5;
-    vertices[0][1] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1)+1.5;
-    vertices[0][2] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1)+1.5;
-    vertices[1][0] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1)-1.5;
-    vertices[1][1] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1)-1.5;
-    vertices[1][2] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1)-1.5;
-    vertices[2][0] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1)+1.5;
-    vertices[2][1] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1)-1.5;
-    vertices[2][2] = 0.5*((double)rand() / (double)RAND_MAX *2 - 1)+1.5;
-    initPlaneNormal();
-    //s_current = s_initial;
-
+    glShadeModel   (GL_SMOOTH);
+    glEnable       (GL_POLYGON_SMOOTH);
+    glEnable       (GL_LINE_SMOOTH);
 }
-
-
 
 
 // The usual main function.
 int main(int argc, char** argv) {
+    initialize();
+
+    
     glutInit(&argc, argv);
     
     glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowPosition(80, 80);
     glutInitWindowSize(WIDTH, HEIGHT);
-    glutCreateWindow("Particle Systems");
+    glutCreateWindow("Springy");
     glShadeModel(GL_FLAT);
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
     glutMouseFunc(mymouse);
     glutSpecialFunc(keyboard);
     glutIdleFunc(idle);
+    // callback for mouse drags
+    glutMotionFunc (mouseMotionDrag);
+    
+    // callback for mouse movement
+    glutPassiveMotionFunc(mouseMotion);
+    
+    // callback for mouse button changes
+    glutMouseFunc(mouseButton);
+    
+    // register for keyboard events
+    glutKeyboardFunc(keyboardFunc);
     init();
     
     glutMainLoop();
 }
+

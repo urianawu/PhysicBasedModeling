@@ -14,10 +14,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C6ACA41117FB184700D971DA"
-               BuildableName = "Particle System"
-               BlueprintName = "Particle System"
-               ReferencedContainer = "container:Particle System.xcodeproj">
+               BlueprintIdentifier = "C676096D18242B3800A19ABB"
+               BuildableName = "Springy"
+               BlueprintName = "Springy"
+               ReferencedContainer = "container:Springy.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -32,10 +32,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C6ACA41117FB184700D971DA"
-            BuildableName = "Particle System"
-            BlueprintName = "Particle System"
-            ReferencedContainer = "container:Particle System.xcodeproj">
+            BlueprintIdentifier = "C676096D18242B3800A19ABB"
+            BuildableName = "Springy"
+            BlueprintName = "Springy"
+            ReferencedContainer = "container:Springy.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
    </TestAction>
@@ -51,10 +51,10 @@
       <BuildableProductRunnable>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C6ACA41117FB184700D971DA"
-            BuildableName = "Particle System"
-            BlueprintName = "Particle System"
-            ReferencedContainer = "container:Particle System.xcodeproj">
+            BlueprintIdentifier = "C676096D18242B3800A19ABB"
+            BuildableName = "Springy"
+            BlueprintName = "Springy"
+            ReferencedContainer = "container:Springy.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <AdditionalOptions>
@@ -69,10 +69,10 @@
       <BuildableProductRunnable>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C6ACA41117FB184700D971DA"
-            BuildableName = "Particle System"
-            BlueprintName = "Particle System"
-            ReferencedContainer = "container:Particle System.xcodeproj">
+            BlueprintIdentifier = "C676096D18242B3800A19ABB"
+            BuildableName = "Springy"
+            BlueprintName = "Springy"
+            ReferencedContainer = "container:Springy.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

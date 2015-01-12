@@ -4,7 +4,7 @@
 <dict>
 	<key>SchemeUserState</key>
 	<dict>
-		<key>Flocking.xcscheme</key>
+		<key>Particle System.xcscheme</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>0</integer>
@@ -12,7 +12,7 @@
 	</dict>
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
-		<key>C617EA90180B1A37003FC604</key>
+		<key>C6ACA41117FB184700D971DA</key>
 		<dict>
 			<key>primary</key>
 			<true/>

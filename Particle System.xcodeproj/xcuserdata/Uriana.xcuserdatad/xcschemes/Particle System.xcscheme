@@ -14,10 +14,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C617EA90180B1A37003FC604"
-               BuildableName = "Flocking"
-               BlueprintName = "Flocking"
-               ReferencedContainer = "container:Flocking.xcodeproj">
+               BlueprintIdentifier = "C6ACA41117FB184700D971DA"
+               BuildableName = "Particle System"
+               BlueprintName = "Particle System"
+               ReferencedContainer = "container:Particle System.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -32,10 +32,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C617EA90180B1A37003FC604"
-            BuildableName = "Flocking"
-            BlueprintName = "Flocking"
-            ReferencedContainer = "container:Flocking.xcodeproj">
+            BlueprintIdentifier = "C6ACA41117FB184700D971DA"
+            BuildableName = "Particle System"
+            BlueprintName = "Particle System"
+            ReferencedContainer = "container:Particle System.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
    </TestAction>
@@ -51,10 +51,10 @@
       <BuildableProductRunnable>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C617EA90180B1A37003FC604"
-            BuildableName = "Flocking"
-            BlueprintName = "Flocking"
-            ReferencedContainer = "container:Flocking.xcodeproj">
+            BlueprintIdentifier = "C6ACA41117FB184700D971DA"
+            BuildableName = "Particle System"
+            BlueprintName = "Particle System"
+            ReferencedContainer = "container:Particle System.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <AdditionalOptions>
@@ -69,10 +69,10 @@
       <BuildableProductRunnable>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C617EA90180B1A37003FC604"
-            BuildableName = "Flocking"
-            BlueprintName = "Flocking"
-            ReferencedContainer = "container:Flocking.xcodeproj">
+            BlueprintIdentifier = "C6ACA41117FB184700D971DA"
+            BuildableName = "Particle System"
+            BlueprintName = "Particle System"
+            ReferencedContainer = "container:Particle System.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

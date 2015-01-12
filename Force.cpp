@@ -18,9 +18,9 @@ Force::Force(Vector3D thevalue)
     value = thevalue;
 }
 
-void Force::addTo(Particle &p)
-{
-    Vector3D f = p.getForce();
-    p.setForce( f + value);
+//void Force::addTo(Particle &p)
+//{
+ //   Vector3D f = p.getForce();
+  //  p.setForce( f + value);
     
-}
+//}

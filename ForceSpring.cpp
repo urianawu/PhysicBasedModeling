@@ -7,15 +7,11 @@
 //
 
 #include "ForceSpring.h"
-ForceSpring::ForceSpring(Point3D pi, Point3D pj, Vector3D vi, Vector3D vj, float sc, float dc, float d)
+ForceSpring::ForceSpring(Particle pi, Particle pj)
 {
-    kij = sc;  //spring constant
-    dij = dc;  //damper constant
-    lij0 = d;
-    
     //Spring Force
     Vector3D sf;
-    Vector3D xij(pj - pi);
+    Vector3D xij(pj.getPosition() - pi.getPosition());
     float lij = Magnitude(xij);
     Vector3D uij = xij;
     uij.Normalize();
@@ -24,12 +20,7 @@ ForceSpring::ForceSpring(Point3D pi, Point3D pj, Vector3D vi, Vector3D vj, float
     
     //Damper Force
     Vector3D df;
-    df = dij * ((vj - vi) * uij) *uij;
+    df = dij * ((pj.getVelocity() - pi.getVelocity()) * uij) *uij;
     
     value = sf + df;
-}
-
-void ForceSpring::setRestD(float d)
-{
-    lij0 = d;
 }

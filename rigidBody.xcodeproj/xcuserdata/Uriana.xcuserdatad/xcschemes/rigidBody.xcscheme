@@ -14,10 +14,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C676096D18242B3800A19ABB"
-               BuildableName = "Springy"
-               BlueprintName = "Springy"
-               ReferencedContainer = "container:Springy.xcodeproj">
+               BlueprintIdentifier = "C6C5EC00183C1E79001342B5"
+               BuildableName = "rigidBody"
+               BlueprintName = "rigidBody"
+               ReferencedContainer = "container:rigidBody.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -32,10 +32,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C676096D18242B3800A19ABB"
-            BuildableName = "Springy"
-            BlueprintName = "Springy"
-            ReferencedContainer = "container:Springy.xcodeproj">
+            BlueprintIdentifier = "C6C5EC00183C1E79001342B5"
+            BuildableName = "rigidBody"
+            BlueprintName = "rigidBody"
+            ReferencedContainer = "container:rigidBody.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
    </TestAction>
@@ -51,10 +51,10 @@
       <BuildableProductRunnable>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C676096D18242B3800A19ABB"
-            BuildableName = "Springy"
-            BlueprintName = "Springy"
-            ReferencedContainer = "container:Springy.xcodeproj">
+            BlueprintIdentifier = "C6C5EC00183C1E79001342B5"
+            BuildableName = "rigidBody"
+            BlueprintName = "rigidBody"
+            ReferencedContainer = "container:rigidBody.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <AdditionalOptions>
@@ -69,10 +69,10 @@
       <BuildableProductRunnable>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C676096D18242B3800A19ABB"
-            BuildableName = "Springy"
-            BlueprintName = "Springy"
-            ReferencedContainer = "container:Springy.xcodeproj">
+            BlueprintIdentifier = "C6C5EC00183C1E79001342B5"
+            BuildableName = "rigidBody"
+            BlueprintName = "rigidBody"
+            ReferencedContainer = "container:rigidBody.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

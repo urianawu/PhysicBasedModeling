@@ -14,12 +14,11 @@
 
 class ForceSpring : public Force {
 public:
-    ForceSpring(Point3D pi, Point3D pj, Vector3D vi, Vector3D vj,float sc, float dc, float d);
-    void setRestD(float d);
+    ForceSpring(Particle pi, Particle pj);
     
 protected:
-    float kij = 100;  //spring constant
-    float dij = 1;  //damper constant
+    float kij = 0.1;  //spring constant
+    float dij = 0.1;  //damper constant
     float lij0 = 1;    //rest distance
 };
 #endif /* defined(__Springy__ForceSpring__) */

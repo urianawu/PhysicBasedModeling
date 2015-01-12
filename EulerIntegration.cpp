@@ -15,6 +15,7 @@ EulerIntegration::EulerIntegration(float theh)
 
 void EulerIntegration::update(Particle &p, Particle &p_after, World w)
 {
+    w.applyForce(p);
     p.setAccel(p.calculateAccel());
     
     //printf("%f", p.getAccel().y);
@@ -31,5 +32,9 @@ void EulerIntegration::update(Particle &p, Particle &p_after, World w)
     //update state
     p = p_after;
     setTime(time + h);
+    
+}
+void EulerIntegration::update(RigidBodyObject &b, RigidBodyObject &b_after, World w)
+{
     
 }

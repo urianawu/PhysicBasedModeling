@@ -15,13 +15,14 @@ class ObstaclePlane : public Obstacle {
 public:
     Vector3D normal;
     Point3D point;
-    
+    bool initial(RigidBodyObject b);
     ObstaclePlane(Vector3D thenormal, Point3D thepoint);
     bool CollisionDetection(Particle p, Particle &p_after);
     void CollisionResponse(float d, Particle &p_after);
-    
+    bool CollisionDetection(RigidBodyObject &b);
+
 protected:
-    float e = 1.0;      //elasticity factor
+    float e = 0.0001;      //elasticity factor
     float miu = 0.1;    //friction factor
 };
 

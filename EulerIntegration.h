@@ -15,6 +15,7 @@
 class EulerIntegration : public Integration {
 public:
     void update(Particle &p, Particle &p_after, World w);
+    void update(RigidBodyObject &b, RigidBodyObject &b_after, World w);
     EulerIntegration(float theh);
     
     

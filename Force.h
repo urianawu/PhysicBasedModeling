@@ -11,14 +11,13 @@
 
 #include <iostream>
 #include "Vector3D.h"
-#include "Particle.h"
 class Force {
 public:
     Vector3D value;
     
     Force();
     Force(Vector3D thevalue);
-    void addTo(Particle &p);
+    //void addTo(Particle &p);
 
 };
 #endif /* defined(__Springy__Force__) */

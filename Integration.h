@@ -11,6 +11,7 @@
 
 #include <iostream>
 #include "Particle.h"
+#include "RigidBodyObject.h"
 #include "World.h"
 class Integration {
 public:
@@ -22,6 +23,7 @@ public:
     
     //virtual ~Integration(){}
     virtual void update(Particle &p, Particle &p_after, World w) = 0;
+    virtual void update(RigidBodyObject &b,RigidBodyObject &b_after, World w) = 0;
     
 protected:
     float time = 0;

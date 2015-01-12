@@ -13,14 +13,21 @@
 #include <vector>
 #include "Obstacle.h"
 #include "ObstaclePlane.h"
+#include "Force.h"
+#include "ForceAir.h"
 
 class World {
 public:
     void addObstacle(Obstacle* o);
     void checkCollision(Particle p, Particle &p_after);
-    
+    void checkCollision(RigidBodyObject &b);
+    void addForce(Force *f);
+    void applyForce(Particle &p);
+
 protected:
     std::vector<Obstacle *> Obstacles;
+    std::vector<Force *> forceList;
+
     bool collided = false;
 };
 #endif /* defined(__Springy__World__) */

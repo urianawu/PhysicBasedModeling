@@ -4,7 +4,7 @@
 <dict>
 	<key>SchemeUserState</key>
 	<dict>
-		<key>Springy.xcscheme</key>
+		<key>rigidBody.xcscheme</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>0</integer>
@@ -12,7 +12,7 @@
 	</dict>
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
-		<key>C676096D18242B3800A19ABB</key>
+		<key>C6C5EC00183C1E79001342B5</key>
 		<dict>
 			<key>primary</key>
 			<true/>

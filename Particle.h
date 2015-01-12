@@ -10,7 +10,11 @@
 #define __Springy__Particle__
 
 #include <iostream>
+#include <vector>
 #include "Vector3D.h"
+#include "Force.h"
+
+using namespace std;
 
 class Particle {
 public:
@@ -29,7 +33,6 @@ public:
     void setMass(float m);
     void setColor(Point3D c);
     void setForce(Vector3D f);
-    
     Vector3D calculateAccel();
     
 protected:

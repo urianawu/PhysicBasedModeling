@@ -12,25 +12,20 @@
 #include <iostream>
 #include "Vector3D.h"
 #include "Integration.h"
-#define N 512
+# include "rk4.hpp"
 
-class RK4Integration {
+
+class RK4Integration :public Integration{
 public:
-    void update(std::vector<Particle *> &p, std::vector<Particle *> &p_after, World w);
-    void update2(std::vector<Particle *> &p, std::vector<Particle *> &p_after, World w);
-    void update3(std::vector<Particle *> &p, std::vector<Particle *> &p_after, World w);
-    void update4(std::vector<Particle *> &p, std::vector<Particle *> &p_after, World w);
+    void update(Particle &p, Particle &p_after, World w);
+    void update(RigidBodyObject &b, RigidBodyObject &b_after, World w);
+    
     RK4Integration(float theh);
-    float getTime() const;
-    void setTime(float thetime);
     
 protected:
-    Point3D F1p[N], F2p[N], F3p[N], F4p[N];
-    Vector3D F1v[N], F2v[N], F3v[N],F4v[N];
+    Point3D F1p, F2p, F3p, F4p;
+    Vector3D F1v, F2v, F3v,F4v;
     
-    std::vector<Particle *> buffer;
-    float time = 0;
-    float h;
 };
 
 #endif /* defined(__Springy__RK4Integration__) */

@@ -1,0 +1,236 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C60D6DF017E8198A00001623 /* GLUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C60D6DEF17E8198A00001623 /* GLUI.framework */; };
+		C624604A17E02AF60099165B /* BouncingBall.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = C624604917E02AF60099165B /* BouncingBall.1 */; };
+		C624605117E02BDE0099165B /* OpenGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C624605017E02BDE0099165B /* OpenGL.framework */; };
+		C624605317E02BF50099165B /* GLUT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C624605217E02BF50099165B /* GLUT.framework */; };
+		C6E9540A17E4E77A00400AE2 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C6E9540917E4E77A00400AE2 /* main.cpp */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C624604217E02AF60099165B /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+				C624604A17E02AF60099165B /* BouncingBall.1 in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		C60D6DEF17E8198A00001623 /* GLUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GLUI.framework; path = System/Library/Frameworks/GLUI.framework; sourceTree = SDKROOT; };
+		C624604417E02AF60099165B /* BouncingBall */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = BouncingBall; sourceTree = BUILT_PRODUCTS_DIR; };
+		C624604917E02AF60099165B /* BouncingBall.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = BouncingBall.1; sourceTree = "<group>"; };
+		C624605017E02BDE0099165B /* OpenGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGL.framework; path = System/Library/Frameworks/OpenGL.framework; sourceTree = SDKROOT; };
+		C624605217E02BF50099165B /* GLUT.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GLUT.framework; path = System/Library/Frameworks/GLUT.framework; sourceTree = SDKROOT; };
+		C6E9540917E4E77A00400AE2 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C624604117E02AF60099165B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C60D6DF017E8198A00001623 /* GLUI.framework in Frameworks */,
+				C624605317E02BF50099165B /* GLUT.framework in Frameworks */,
+				C624605117E02BDE0099165B /* OpenGL.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		C624603B17E02AF60099165B = {
+			isa = PBXGroup;
+			children = (
+				C60D6DEF17E8198A00001623 /* GLUI.framework */,
+				C624605217E02BF50099165B /* GLUT.framework */,
+				C624605017E02BDE0099165B /* OpenGL.framework */,
+				C624604617E02AF60099165B /* BouncingBall */,
+				C624604517E02AF60099165B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C624604517E02AF60099165B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C624604417E02AF60099165B /* BouncingBall */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C624604617E02AF60099165B /* BouncingBall */ = {
+			isa = PBXGroup;
+			children = (
+				C6E9540917E4E77A00400AE2 /* main.cpp */,
+				C624604917E02AF60099165B /* BouncingBall.1 */,
+			);
+			path = BouncingBall;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C624604317E02AF60099165B /* BouncingBall */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C624604D17E02AF60099165B /* Build configuration list for PBXNativeTarget "BouncingBall" */;
+			buildPhases = (
+				C624604017E02AF60099165B /* Sources */,
+				C624604117E02AF60099165B /* Frameworks */,
+				C624604217E02AF60099165B /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BouncingBall;
+			productName = BouncingBall;
+			productReference = C624604417E02AF60099165B /* BouncingBall */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C624603C17E02AF60099165B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0460;
+				ORGANIZATIONNAME = Uriana;
+			};
+			buildConfigurationList = C624603F17E02AF60099165B /* Build configuration list for PBXProject "BouncingBall" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = C624603B17E02AF60099165B;
+			productRefGroup = C624604517E02AF60099165B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C624604317E02AF60099165B /* BouncingBall */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C624604017E02AF60099165B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C6E9540A17E4E77A00400AE2 /* main.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		C624604B17E02AF60099165B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		C624604C17E02AF60099165B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		C624604E17E02AF60099165B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		C624604F17E02AF60099165B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C624603F17E02AF60099165B /* Build configuration list for PBXProject "BouncingBall" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C624604B17E02AF60099165B /* Debug */,
+				C624604C17E02AF60099165B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C624604D17E02AF60099165B /* Build configuration list for PBXNativeTarget "BouncingBall" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C624604E17E02AF60099165B /* Debug */,
+				C624604F17E02AF60099165B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C624603C17E02AF60099165B /* Project object */;
+}
